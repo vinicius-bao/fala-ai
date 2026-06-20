@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "assistente-voz"
+version = "0.1.0"
+description = "Assistente de ditado por voz para Windows (Groq Whisper)"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "pynput>=1.7",
+    "sounddevice>=0.4",
+    "numpy>=1.24",
+    "pyperclip>=1.8",
+    "PySide6>=6.6",
+    "groq>=0.11",
+    "python-dotenv>=1.0",
+    "platformdirs>=4.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7", "pyinstaller>=6"]
+
+[project.scripts]
+assistente-voz = "assistente_voz.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
