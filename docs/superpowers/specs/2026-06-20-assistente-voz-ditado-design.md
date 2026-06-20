@@ -159,7 +159,7 @@ Campos:
 
 | Campo | Padrão | Descrição |
 |---|---|---|
-| `hotkey` | a definir | Atalho global de ditado |
+| `hotkey` | `Ctrl+Alt+Espaço` | Atalho global de ditado (definido pelo capturador na aba Configurações) |
 | `tap_threshold_ms` | 400 | Limiar toque × segurar |
 | `language` | `pt` | Idioma da transcrição |
 | `output_mode` | `paste` | `paste` ou `clipboard_only` |
@@ -172,11 +172,20 @@ API tem prioridade pela variável de ambiente.
 
 ## 11. Interface (PySide6)
 
-- **Ícone de bandeja** com menu: abrir histórico, abrir configurações, sair.
-  Estado visual por cor/ícone (ocioso / gravando / transcrevendo).
-- **Janela de histórico:** lista das transcrições recentes (texto, horário),
-  botão de copiar por item.
-- **Janela de configurações:** edição dos campos da seção 10.
+Uma **única janela** com abas reúne histórico e configurações — o usuário não
+edita arquivo de config na mão.
+
+- **Ícone de bandeja** com menu: abrir a janela, sair. Estado visual por
+  cor/ícone (ocioso / gravando / transcrevendo).
+- **Aba "Histórico":** lista das transcrições recentes (texto, horário), botão
+  de copiar por item.
+- **Aba "Configurações":** edição de todos os campos da seção 10 direto pela
+  interface. Inclui um **capturador de atalho**: o usuário clica em "Definir
+  atalho" e pressiona a combinação desejada, que é gravada e passa a valer na
+  hora (sem reiniciar o app). Também edita limiar de toque, idioma, modo de
+  saída, tamanho do histórico, autostart e a chave da Groq.
+- As alterações são salvas no arquivo de config e aplicadas imediatamente (o
+  listener de atalho é re-registrado ao mudar o atalho).
 - Alternativa descartada: `pystray` + Tkinter (mais leve, porém UI inferior).
 
 ## 12. Tratamento de erros
@@ -209,6 +218,7 @@ API tem prioridade pela variável de ambiente.
    ainda aparece no clipboard e no histórico.
 4. Sem internet, o painel mostra erro e o áudio fica salvo para reenvio.
 5. A chave da API não aparece em nenhum arquivo versionado.
+6. Alterar o atalho pela aba Configurações passa a valer sem reiniciar o app.
 
 ## 16. Riscos e mitigações
 
