@@ -69,14 +69,37 @@ testes que rodam em qualquer sistema:
 python -m unittest discover -s tests -v
 ```
 
-## Empacotar em .exe (opcional)
+## Gerar o instalador (Setup.exe)
+
+Para usar como um programa normal (duplo clique, atalho no Menu Iniciar,
+desinstalador), gere um instalador. **Isso roda numa máquina Windows** — o
+PyInstaller não compila a partir de outro sistema.
+
+**Pré-requisitos da máquina de build:**
+- Python 3.10+
+- [Inno Setup](https://jrsoftware.org/isdl.php) (grátis) — para gerar o `Setup.exe`.
+
+**Gerar tudo com um comando:**
 
 ```powershell
-pip install pyinstaller
-pyinstaller --noconfirm --windowed --name AssistenteDeVoz src/assistente_voz/__main__.py
+build.bat
 ```
 
-O executável fica em `dist/AssistenteDeVoz/`.
+O `build.bat` cria o ambiente, instala as dependências, roda o PyInstaller e o
+Inno Setup. No fim você tem:
+
+- `dist\AssistenteDeVoz\` — o app já executável (pasta).
+- `installer\AssistenteDeVoz-Setup.exe` — **o instalador** para distribuir.
+
+> Se o Inno Setup não estiver instalado, o `build.bat` ainda gera o executável em
+> `dist\AssistenteDeVoz\`; depois é só instalar o Inno Setup e rodar
+> `iscc installer.iss`.
+
+**Quem recebe o `Setup.exe`** só dá duplo clique, escolhe (opcional) atalho na
+área de trabalho e iniciar com o Windows, e pronto — não precisa de Python.
+
+> A chave da Groq não vai dentro do instalador. No primeiro uso, defina-a pela
+> aba *Configurações* ou na variável de ambiente `GROQ_API_KEY`.
 
 ## Estrutura
 

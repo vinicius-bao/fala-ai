@@ -9,8 +9,8 @@ env/
 # Empacotamento
 build/
 dist/
+installer/
 *.exe
-*.spec
 
 # Segredos e config local
 .env
