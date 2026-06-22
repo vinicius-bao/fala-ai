@@ -15,9 +15,13 @@ O app carrega os arquivos desta pasta. A ordem de preferência é:
    pip install pillow
    python tools/make_icon.py
    ```
-   (isso lê `assets/logo.png` e cria `assets/icon.ico` com vários tamanhos).
+   Ele usa `assets/logo.png` se existir; senão, renderiza `assets/logo.svg`. Cria
+   `assets/icon.ico` com vários tamanhos.
 
 Sem `icon.ico`, o build ainda funciona — o `.exe` só fica com o ícone padrão.
+
+> Depois de gerar o `icon.ico` e reconstruir o `.exe`, se o ícone fixado na barra
+> não mudar, **desafixe e fixe de novo** (o Windows guarda o ícone em cache).
 
 ## Cores da marca (Fala AI)
 
