@@ -14,6 +14,11 @@ from pathlib import Path
 
 APP_NAME = "assistente-voz"
 
+# Repositório de atualização embutido no app (o usuário final NÃO configura isto).
+# Defina como "usuario/repositorio" do GitHub quando o repo existir. Vazio =
+# verificação de atualização desligada.
+DEFAULT_UPDATE_REPO = ""
+
 
 @dataclass
 class Config:
@@ -71,3 +76,8 @@ def save_config(cfg: Config, path: Path | None = None) -> None:
 def resolve_api_key(cfg: Config) -> str:
     """Resolve a chave da Groq: ambiente primeiro, depois config."""
     return os.environ.get("GROQ_API_KEY", "").strip() or cfg.groq_api_key.strip()
+
+
+def resolve_update_repo(cfg: Config) -> str:
+    """Repositório de updates: override do config, senão o embutido no app."""
+    return (cfg.update_repo or DEFAULT_UPDATE_REPO).strip()

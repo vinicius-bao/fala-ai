@@ -223,11 +223,13 @@ class Controller(QObject):
 
     # ---- verificação de atualização (GitHub Releases) ----
     def check_updates(self, manual: bool = False) -> None:
-        repo = self.config.update_repo.strip()
+        from .config import resolve_update_repo
+
+        repo = resolve_update_repo(self.config)
         if not repo:
             if manual:
                 self.updateError.emit(
-                    "Defina o repositório de atualização na aba Configurações."
+                    "Atualização automática ainda não configurada nesta versão."
                 )
             return
         self._update_manual = manual

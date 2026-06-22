@@ -272,7 +272,9 @@ principalmente **mensagens de voz do WhatsApp**.
 
 - Módulo `updater.py`: parte pura (`parse_version`/`is_newer`, testada) + acesso
   ao GitHub Releases API (stdlib `urllib`).
-- Config: `update_repo` (ex.: `usuario/fala-ai`) e `check_updates_on_start`.
+- Repositório **embutido no app** (`DEFAULT_UPDATE_REPO` em `config.py`); o
+  usuário final não configura. `config.update_repo` existe só como override
+  avançado. `check_updates_on_start` liga a checagem ao iniciar.
 - Fluxo: checa ao iniciar (se configurado) e manualmente (aba Configurações e
   menu da bandeja). Havendo versão nova, abre um diálogo com as notas e o botão
   "Baixar e instalar" (baixa o `Setup.exe` para a pasta temporária e o executa,

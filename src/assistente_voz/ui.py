@@ -361,8 +361,6 @@ class MainWindow(QMainWindow):
         self.apikey_edit = QLineEdit(cfg.groq_api_key)
         self.apikey_edit.setEchoMode(QLineEdit.Password)
         self.apikey_edit.setPlaceholderText("vazio = usa GROQ_API_KEY do ambiente")
-        self.update_repo_edit = QLineEdit(cfg.update_repo)
-        self.update_repo_edit.setPlaceholderText("usuario/repositorio (GitHub)")
         self.update_check_box = QCheckBox("Verificar atualizações ao iniciar")
         self.update_check_box.setChecked(cfg.check_updates_on_start)
         check_now_btn = QPushButton("Verificar atualizações agora")
@@ -382,7 +380,6 @@ class MainWindow(QMainWindow):
         form.addRow("", self.autostart_check)
         form.addRow("Modelo Groq:", self.model_edit)
         form.addRow("Chave Groq:", self.apikey_edit)
-        form.addRow("Repositório de updates:", self.update_repo_edit)
         form.addRow("", self.update_check_box)
         form.addRow("", check_now_btn)
         form.addRow(save_btn)
@@ -399,7 +396,6 @@ class MainWindow(QMainWindow):
             autostart=self.autostart_check.isChecked(),
             groq_model=self.model_edit.text().strip() or "whisper-large-v3",
             groq_api_key=self.apikey_edit.text().strip(),
-            update_repo=self.update_repo_edit.text().strip(),
             check_updates_on_start=self.update_check_box.isChecked(),
         )
         try:

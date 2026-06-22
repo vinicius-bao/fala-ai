@@ -73,7 +73,9 @@ def main() -> int:
     controller.start()
 
     # Verifica atualizações alguns segundos após iniciar (se configurado).
-    if cfg.check_updates_on_start and cfg.update_repo.strip():
+    from .config import resolve_update_repo
+
+    if cfg.check_updates_on_start and resolve_update_repo(cfg):
         QTimer.singleShot(3000, lambda: controller.check_updates(manual=False))
 
     window.show()  # primeira execução mostra a janela; feche-a para a bandeja
