@@ -10,7 +10,7 @@ def main() -> int:
 
     load_dotenv()  # carrega GROQ_API_KEY do .env, se existir
 
-    from PySide6.QtCore import Qt
+    from PySide6.QtCore import Qt, QTimer
     from PySide6.QtWidgets import QApplication, QMessageBox, QSystemTrayIcon
 
     from .app import Controller
@@ -50,7 +50,12 @@ def main() -> int:
     controller = Controller(cfg, history)
     window = MainWindow(controller)
     TrayApp(controller, window)
+    controller.quitRequested.connect(app.quit)
     controller.start()
+
+    # Verifica atualizações alguns segundos após iniciar (se configurado).
+    if cfg.check_updates_on_start and cfg.update_repo.strip():
+        QTimer.singleShot(3000, lambda: controller.check_updates(manual=False))
 
     window.show()  # primeira execução mostra a janela; feche-a para a bandeja
     return app.exec()

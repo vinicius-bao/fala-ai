@@ -267,3 +267,15 @@ principalmente **mensagens de voz do WhatsApp**.
 - **Módulo novo:** `audiofile.py` (validação de formato/tamanho e leitura), puro
   e testado. O motor de transcrição ganhou o parâmetro `filename` para a Groq
   detectar o formato. O fluxo de ditado por voz permanece inalterado.
+
+## 19. Adendo — Verificação de atualização
+
+- Módulo `updater.py`: parte pura (`parse_version`/`is_newer`, testada) + acesso
+  ao GitHub Releases API (stdlib `urllib`).
+- Config: `update_repo` (ex.: `usuario/fala-ai`) e `check_updates_on_start`.
+- Fluxo: checa ao iniciar (se configurado) e manualmente (aba Configurações e
+  menu da bandeja). Havendo versão nova, abre um diálogo com as notas e o botão
+  "Baixar e instalar" (baixa o `Setup.exe` para a pasta temporária e o executa,
+  encerrando o app). Há também "Abrir página" do release.
+- Como configurações/histórico/chave ficam em AppData (fora da instalação), eles
+  sobrevivem às atualizações. Requer o projeto no GitHub com Releases.

@@ -115,6 +115,24 @@ Inno Setup. No fim você tem:
 > A chave da Groq não vai dentro do instalador. No primeiro uso, defina-a pela
 > aba *Configurações* ou na variável de ambiente `GROQ_API_KEY`.
 
+## Atualizações
+
+O app pode verificar se há versão nova no **GitHub Releases**:
+
+- Em *Configurações*, preencha **Repositório de updates** (ex.: `usuario/fala-ai`)
+  e marque *Verificar atualizações ao iniciar*.
+- Ele checa ao abrir (e há *Verificar atualizações agora* nas Configurações e no
+  menu da bandeja). Havendo versão nova, mostra as notas e um botão **Baixar e
+  instalar** (baixa o `Setup.exe` e o executa).
+- Para **publicar** uma atualização: suba a versão (em `installer.iss`,
+  `pyproject.toml` e `src/assistente_voz/__init__.py`), gere o `Setup.exe` com o
+  `build.bat` e crie um **Release** no GitHub com o `.exe` anexado.
+- Configurações, histórico e a chave da Groq ficam fora da pasta de instalação,
+  então **sobrevivem** às atualizações e reinstalações.
+
+> Requer o projeto no GitHub com Releases. O build automático na nuvem
+> (GitHub Actions) é o complemento natural — dá para configurar depois.
+
 ## Aparência (logo e cores)
 
 - **Tema automático:** segue o claro/escuro do Windows.

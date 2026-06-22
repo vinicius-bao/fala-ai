@@ -26,6 +26,8 @@ class Config:
     autostart: bool = False
     groq_model: str = "whisper-large-v3"
     groq_api_key: str = ""              # vazio => usa GROQ_API_KEY do ambiente
+    update_repo: str = ""              # ex.: "usuario/fala-ai" (GitHub Releases)
+    check_updates_on_start: bool = True
 
     @classmethod
     def from_dict(cls, data: dict) -> "Config":

@@ -131,6 +131,48 @@ class TranscriptionResultDialog(QDialog):
         QApplication.clipboard().setText(self._text)
 
 
+class UpdateDialog(QDialog):
+    """Avisa que há uma versão nova, com notas e ações de download."""
+
+    def __init__(self, rel, controller, parent=None):
+        super().__init__(parent)
+        self._rel = rel
+        self._controller = controller
+        self.setWindowTitle("Atualização disponível")
+        self.setWindowIcon(app_icon())
+        self.resize(480, 360)
+        lay = QVBoxLayout(self)
+        lay.addWidget(QLabel(f"Nova versão disponível: {rel.version}"))
+        notes = QPlainTextEdit(rel.notes or "(sem notas de versão)")
+        notes.setReadOnly(True)
+        lay.addWidget(notes)
+        row = QHBoxLayout()
+        row.addStretch()
+        if rel.installer_url:
+            install_btn = QPushButton("Baixar e instalar")
+            install_btn.setObjectName("Primary")
+            install_btn.clicked.connect(self._install)
+            row.addWidget(install_btn)
+        page_btn = QPushButton("Abrir página")
+        page_btn.clicked.connect(self._open_page)
+        later_btn = QPushButton("Agora não")
+        later_btn.clicked.connect(self.reject)
+        row.addWidget(page_btn)
+        row.addWidget(later_btn)
+        lay.addLayout(row)
+
+    def _install(self) -> None:
+        self._controller.download_and_install(self._rel)
+        self.accept()
+
+    def _open_page(self) -> None:
+        import webbrowser
+
+        if self._rel.page_url:
+            webbrowser.open(self._rel.page_url)
+        self.accept()
+
+
 class MainWindow(QMainWindow):
     def __init__(self, controller: Controller):
         super().__init__()
@@ -160,7 +202,25 @@ class MainWindow(QMainWindow):
         controller.stateChanged.connect(self._on_state)
         controller.fileResult.connect(self._show_file_result)
         controller.fileBusy.connect(self._on_file_busy)
+        controller.updateAvailable.connect(self._show_update)
+        controller.updateUpToDate.connect(
+            lambda: self.statusBar().showMessage(
+                "Você já está na versão mais recente.", 5000
+            )
+        )
+        controller.updateStatus.connect(
+            lambda m: self.statusBar().showMessage(m, 6000)
+        )
+        controller.updateError.connect(
+            lambda m: self.statusBar().showMessage(m, 8000)
+        )
         self.refresh_history()
+
+    def _show_update(self, rel) -> None:
+        self.show()
+        self.raise_()
+        self.activateWindow()
+        UpdateDialog(rel, self.controller, self).exec()
 
     def _header(self) -> QWidget:
         h = QWidget()
@@ -301,6 +361,14 @@ class MainWindow(QMainWindow):
         self.apikey_edit = QLineEdit(cfg.groq_api_key)
         self.apikey_edit.setEchoMode(QLineEdit.Password)
         self.apikey_edit.setPlaceholderText("vazio = usa GROQ_API_KEY do ambiente")
+        self.update_repo_edit = QLineEdit(cfg.update_repo)
+        self.update_repo_edit.setPlaceholderText("usuario/repositorio (GitHub)")
+        self.update_check_box = QCheckBox("Verificar atualizações ao iniciar")
+        self.update_check_box.setChecked(cfg.check_updates_on_start)
+        check_now_btn = QPushButton("Verificar atualizações agora")
+        check_now_btn.clicked.connect(
+            lambda: self.controller.check_updates(manual=True)
+        )
         save_btn = QPushButton("Salvar")
         save_btn.setObjectName("Primary")
         save_btn.clicked.connect(self._save_settings)
@@ -314,6 +382,9 @@ class MainWindow(QMainWindow):
         form.addRow("", self.autostart_check)
         form.addRow("Modelo Groq:", self.model_edit)
         form.addRow("Chave Groq:", self.apikey_edit)
+        form.addRow("Repositório de updates:", self.update_repo_edit)
+        form.addRow("", self.update_check_box)
+        form.addRow("", check_now_btn)
         form.addRow(save_btn)
         return w
 
@@ -328,6 +399,8 @@ class MainWindow(QMainWindow):
             autostart=self.autostart_check.isChecked(),
             groq_model=self.model_edit.text().strip() or "whisper-large-v3",
             groq_api_key=self.apikey_edit.text().strip(),
+            update_repo=self.update_repo_edit.text().strip(),
+            check_updates_on_start=self.update_check_box.isChecked(),
         )
         try:
             parse_hotkey(cfg.hotkey)
@@ -374,10 +447,13 @@ class TrayApp:
         open_action.triggered.connect(self.show_window)
         file_action = QAction("Transcrever arquivo de áudio…", menu)
         file_action.triggered.connect(window._open_audio_file)
+        update_action = QAction("Verificar atualizações…", menu)
+        update_action.triggered.connect(lambda: controller.check_updates(manual=True))
         quit_action = QAction("Sair", menu)
         quit_action.triggered.connect(self._quit)
         menu.addAction(open_action)
         menu.addAction(file_action)
+        menu.addAction(update_action)
         menu.addSeparator()
         menu.addAction(quit_action)
         self.tray.setContextMenu(menu)

@@ -28,6 +28,11 @@ class Controller(QObject):
     historyChanged = Signal()
     fileResult = Signal(str, str)       # transcrição de arquivo: (texto, nome)
     fileBusy = Signal(bool)             # transcrevendo um arquivo
+    updateAvailable = Signal(object)    # Release (há versão nova)
+    updateUpToDate = Signal()           # já está atualizado (só em checagem manual)
+    updateStatus = Signal(str)          # mensagens de progresso da atualização
+    updateError = Signal(str)
+    quitRequested = Signal()            # pedir encerramento (ex.: após abrir instalador)
 
     # internos: trazem eventos de outras threads para a thread do Qt
     _hkStart = Signal()
@@ -36,6 +41,9 @@ class Controller(QObject):
     _transcriptionFailed = Signal(str, object)  # (mensagem, wav bytes)
     _fileReady = Signal(str, str)
     _fileFailed = Signal(str)
+    _updateDone = Signal(object)        # (Release | None)
+    _updateFail = Signal(str)
+    _installerReady = Signal(str)       # caminho do instalador baixado
 
     def __init__(self, config: Config, history: History):
         super().__init__()
@@ -53,6 +61,10 @@ class Controller(QObject):
         self._transcriptionFailed.connect(self._on_failed, Qt.QueuedConnection)
         self._fileReady.connect(self._on_file_ready, Qt.QueuedConnection)
         self._fileFailed.connect(self._on_file_failed, Qt.QueuedConnection)
+        self._updateDone.connect(self._on_update_done, Qt.QueuedConnection)
+        self._updateFail.connect(self._on_update_fail, Qt.QueuedConnection)
+        self._installerReady.connect(self._on_installer_ready, Qt.QueuedConnection)
+        self._update_manual = False
 
     # ---- ciclo de vida ----
     def start(self) -> None:
@@ -208,6 +220,83 @@ class Controller(QObject):
     def _on_file_failed(self, message: str) -> None:
         self.fileBusy.emit(False)
         self.failed.emit(f"Falha ao transcrever o arquivo: {message}")
+
+    # ---- verificação de atualização (GitHub Releases) ----
+    def check_updates(self, manual: bool = False) -> None:
+        repo = self.config.update_repo.strip()
+        if not repo:
+            if manual:
+                self.updateError.emit(
+                    "Defina o repositório de atualização na aba Configurações."
+                )
+            return
+        self._update_manual = manual
+        threading.Thread(
+            target=self._update_check_worker, args=(repo,), daemon=True
+        ).start()
+
+    def _update_check_worker(self, repo: str) -> None:
+        from .updater import fetch_latest_release
+
+        try:
+            self._updateDone.emit(fetch_latest_release(repo))
+        except Exception as e:  # noqa: BLE001
+            self._updateFail.emit(str(e))
+
+    def _on_update_done(self, rel) -> None:
+        from . import __version__
+        from .updater import is_newer
+
+        if rel and is_newer(rel.version, __version__):
+            self.updateAvailable.emit(rel)
+        elif self._update_manual:
+            self.updateUpToDate.emit()
+
+    def _on_update_fail(self, message: str) -> None:
+        if self._update_manual:
+            self.updateError.emit(f"Não consegui verificar atualizações: {message}")
+
+    def download_and_install(self, rel) -> None:
+        url = getattr(rel, "installer_url", None)
+        if not url:
+            self.updateError.emit("Este release não tem instalador (.exe).")
+            return
+        self._update_manual = True
+        self.updateStatus.emit("Baixando atualização…")
+        threading.Thread(
+            target=self._download_worker, args=(url,), daemon=True
+        ).start()
+
+    def _download_worker(self, url: str) -> None:
+        import os
+        import tempfile
+
+        from .updater import download_file
+
+        try:
+            dest = os.path.join(tempfile.gettempdir(), "FalaAI-Setup.exe")
+            download_file(url, dest)
+            self._installerReady.emit(dest)
+        except Exception as e:  # noqa: BLE001
+            self._updateFail.emit(str(e))
+
+    def _on_installer_ready(self, path: str) -> None:
+        import os
+        import sys
+
+        self.updateStatus.emit("Abrindo o instalador…")
+        try:
+            if sys.platform == "win32":
+                os.startfile(path)  # type: ignore[attr-defined]
+            else:
+                import webbrowser
+
+                webbrowser.open(f"file://{path}")
+        except Exception as e:  # noqa: BLE001
+            self.updateError.emit(f"Não consegui abrir o instalador: {e}")
+            return
+        self.shutdown()
+        self.quitRequested.emit()
 
     def _save_failed_audio(self, wav: bytes) -> str:
         try:
