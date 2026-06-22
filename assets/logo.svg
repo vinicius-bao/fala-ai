@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="Fala AI">
+  <defs>
+    <linearGradient id="falaai" x1="0" y1="100" x2="100" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#BD619D"/>
+      <stop offset="0.5" stop-color="#B48BB9"/>
+      <stop offset="1" stop-color="#FBB03B"/>
+    </linearGradient>
+  </defs>
+  <g fill="url(#falaai)">
+    <rect x="9"  y="39" width="10" height="22" rx="5"/>
+    <rect x="27" y="23" width="10" height="54" rx="5"/>
+    <rect x="45" y="11" width="10" height="78" rx="5"/>
+    <rect x="63" y="23" width="10" height="54" rx="5"/>
+    <rect x="81" y="39" width="10" height="22" rx="5"/>
+  </g>
+</svg>

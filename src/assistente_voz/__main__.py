@@ -10,16 +10,36 @@ def main() -> int:
 
     load_dotenv()  # carrega GROQ_API_KEY do .env, se existir
 
+    from PySide6.QtCore import Qt
     from PySide6.QtWidgets import QApplication, QMessageBox, QSystemTrayIcon
 
     from .app import Controller
     from .config import config_dir, load_config
     from .history import History
+    from .resources import app_icon
+    from .theme import DARK, LIGHT, build_qss
     from .ui import MainWindow, TrayApp
 
     app = QApplication(sys.argv)
-    app.setApplicationName("Assistente de Voz")
+    app.setApplicationName("Fala AI")
     app.setQuitOnLastWindowClosed(False)  # vive na bandeja
+    app.setWindowIcon(app_icon())
+
+    # Tema automático: segue o claro/escuro do Windows e reage a mudanças.
+    hints = app.styleHints()
+
+    def _apply_theme() -> None:
+        try:
+            dark = hints.colorScheme() == Qt.ColorScheme.Dark
+        except Exception:  # versões antigas do Qt: assume claro
+            dark = False
+        app.setStyleSheet(build_qss(DARK if dark else LIGHT))
+
+    _apply_theme()
+    try:
+        hints.colorSchemeChanged.connect(lambda *_: _apply_theme())
+    except Exception:
+        pass
 
     if not QSystemTrayIcon.isSystemTrayAvailable():
         QMessageBox.critical(None, "Erro", "Bandeja do sistema indisponível.")

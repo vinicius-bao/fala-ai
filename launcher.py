@@ -1,4 +1,4 @@
-"""Ponto de entrada usado pelo PyInstaller (vira o AssistenteDeVoz.exe)."""
+"""Ponto de entrada usado pelo PyInstaller (vira o FalaAI.exe)."""
 
 from assistente_voz.__main__ import main
 

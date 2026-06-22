@@ -1,4 +1,4 @@
-# Assistente de Voz
+# Fala AI
 
 Aplicativo de **ditado por voz** para Windows. Você pressiona um atalho global,
 fala, e o texto transcrito é **colado onde o cursor estiver**, **copiado para a
@@ -102,11 +102,11 @@ build.bat
 O `build.bat` cria o ambiente, instala as dependências, roda o PyInstaller e o
 Inno Setup. No fim você tem:
 
-- `dist\AssistenteDeVoz\` — o app já executável (pasta).
-- `installer\AssistenteDeVoz-Setup.exe` — **o instalador** para distribuir.
+- `dist\FalaAI\` — o app já executável (pasta).
+- `installer\FalaAI-Setup.exe` — **o instalador** para distribuir.
 
 > Se o Inno Setup não estiver instalado, o `build.bat` ainda gera o executável em
-> `dist\AssistenteDeVoz\`; depois é só instalar o Inno Setup e rodar
+> `dist\FalaAI\`; depois é só instalar o Inno Setup e rodar
 > `iscc installer.iss`.
 
 **Quem recebe o `Setup.exe`** só dá duplo clique, escolhe (opcional) atalho na
@@ -115,17 +115,30 @@ Inno Setup. No fim você tem:
 > A chave da Groq não vai dentro do instalador. No primeiro uso, defina-a pela
 > aba *Configurações* ou na variável de ambiente `GROQ_API_KEY`.
 
+## Aparência (logo e cores)
+
+- **Tema automático:** segue o claro/escuro do Windows.
+- **Cores:** centralizadas em [`src/assistente_voz/theme.py`](src/assistente_voz/theme.py)
+  (paletas `LIGHT`/`DARK` + gradiente da marca). Mudar o visual = editar lá.
+- **Logo/ícone:** ficam em `assets/`. Já vem um `logo.svg` da marca; para usar a
+  sua, coloque `assets/logo.png` e gere o `assets/icon.ico` (veja
+  [`assets/README.md`](assets/README.md)).
+
 ## Estrutura
 
 ```
+assets/             # logo.svg, logo.png (sua), icon.ico
 src/assistente_voz/
   activation.py     # máquina de estados segurar/tocar (pura)
   audio.py          # gravação do microfone -> WAV
+  audiofile.py      # leitura/validação de arquivos de áudio
   transcription.py  # motor de STT plugável (Groq)
   hotkey.py         # atalho global + parsing
   output.py         # clipboard + colar (Ctrl+V)
   history.py        # histórico (memória + JSON)
   config.py         # configurações
+  resources.py      # carrega logo/ícone (com fallback)
+  theme.py          # paleta de cores + estilo (QSS)
   app.py            # controlador (orquestra tudo)
   ui.py             # bandeja + janela (abas Histórico/Configurações)
   __main__.py       # ponto de entrada

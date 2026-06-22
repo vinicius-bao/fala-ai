@@ -1,11 +1,12 @@
 # -*- mode: python ; coding: utf-8 -*-
-"""Configuração do PyInstaller (build em UMA pasta -> dist/AssistenteDeVoz/).
+"""PyInstaller (build em UMA pasta -> dist/FalaAI/).
 
-Coleta explicitamente os pacotes com dados/binários que o PyInstaller às vezes
-não acha sozinho (DLL do PortAudio do sounddevice, certificados do certifi para
-as chamadas HTTPS da Groq, etc.). O PySide6 é tratado pelo hook embutido do
-PyInstaller.
+Empacota os assets (logo/ícone), coleta DLLs/dados que às vezes não são achados
+sozinhos (PortAudio do sounddevice, certificados do certifi) e usa
+assets/icon.ico como ícone do .exe quando existir.
 """
+
+import os
 
 from PyInstaller.utils.hooks import collect_all, collect_submodules
 
@@ -16,6 +17,17 @@ for pkg in ("groq", "sounddevice", "pynput", "pyperclip", "platformdirs", "doten
     binaries += b
     hiddenimports += h
 hiddenimports += collect_submodules("assistente_voz")
+hiddenimports += ["PySide6.QtSvg"]
+
+# Inclui a pasta assets/ no app empacotado.
+if os.path.isdir("assets"):
+    for _f in os.listdir("assets"):
+        _p = os.path.join("assets", _f)
+        if os.path.isfile(_p):
+            datas.append((_p, "assets"))
+
+_ico = os.path.join("assets", "icon.ico")
+_icon = _ico if os.path.isfile(_ico) else None
 
 a = Analysis(
     ["launcher.py"],
@@ -36,17 +48,18 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name="AssistenteDeVoz",
+    name="FalaAI",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    console=False,            # app de janela/bandeja: sem console
+    console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon=_icon,
 )
 coll = COLLECT(
     exe,
@@ -55,5 +68,5 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name="AssistenteDeVoz",
+    name="FalaAI",
 )

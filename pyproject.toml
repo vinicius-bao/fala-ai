@@ -20,7 +20,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=7", "pyinstaller>=6"]
+dev = ["pytest>=7", "pyinstaller>=6", "pillow>=10"]
 
 [project.scripts]
 assistente-voz = "assistente_voz.__main__:main"

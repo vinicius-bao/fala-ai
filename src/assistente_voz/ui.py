@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QAction, QColor, QIcon, QPainter, QPixmap
+from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -32,6 +32,9 @@ from .app import Controller
 from .audiofile import SUPPORTED_EXTS, is_supported
 from .config import Config, save_config
 from .hotkey import parse_hotkey
+from .resources import app_icon, logo_pixmap, tray_icon
+
+APP_NAME = "Fala AI"
 
 
 def _qt_key_to_token(key: int) -> str:
@@ -51,18 +54,6 @@ def _qt_key_to_token(key: int) -> str:
         Qt.Key_PageDown: "page_down",
     }
     return special.get(key, "")
-
-
-def _dot_icon(color: str) -> QIcon:
-    pm = QPixmap(32, 32)
-    pm.fill(Qt.transparent)
-    p = QPainter(pm)
-    p.setRenderHint(QPainter.Antialiasing)
-    p.setBrush(QColor(color))
-    p.setPen(Qt.NoPen)
-    p.drawEllipse(4, 4, 24, 24)
-    p.end()
-    return QIcon(pm)
 
 
 class HotkeyCaptureButton(QPushButton):
@@ -118,7 +109,8 @@ class TranscriptionResultDialog(QDialog):
     def __init__(self, text: str, name: str, parent=None):
         super().__init__(parent)
         self._text = text
-        self.setWindowTitle(f"Transcrição — {name}")
+        self.setWindowTitle(f"{APP_NAME} — {name}")
+        self.setWindowIcon(app_icon())
         self.resize(540, 380)
         lay = QVBoxLayout(self)
         lay.addWidget(QLabel(f"Áudio: {name}"))
@@ -143,14 +135,22 @@ class MainWindow(QMainWindow):
     def __init__(self, controller: Controller):
         super().__init__()
         self.controller = controller
-        self.setWindowTitle("Assistente de Voz")
-        self.resize(580, 480)
+        self.setWindowTitle(APP_NAME)
+        self.setWindowIcon(app_icon())
+        self.resize(580, 500)
         self.setAcceptDrops(True)
 
         tabs = QTabWidget()
         tabs.addTab(self._history_tab(), "Histórico")
         tabs.addTab(self._settings_tab(), "Configurações")
-        self.setCentralWidget(tabs)
+
+        central = QWidget()
+        outer = QVBoxLayout(central)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+        outer.addWidget(self._header())
+        outer.addWidget(tabs)
+        self.setCentralWidget(central)
 
         controller.historyChanged.connect(self.refresh_history)
         controller.transcribed.connect(
@@ -161,6 +161,21 @@ class MainWindow(QMainWindow):
         controller.fileResult.connect(self._show_file_result)
         controller.fileBusy.connect(self._on_file_busy)
         self.refresh_history()
+
+    def _header(self) -> QWidget:
+        h = QWidget()
+        h.setObjectName("Header")
+        lay = QHBoxLayout(h)
+        lay.setContentsMargins(16, 12, 16, 12)
+        lay.setSpacing(10)
+        logo = QLabel()
+        logo.setPixmap(logo_pixmap(34))
+        title = QLabel(APP_NAME)
+        title.setObjectName("HeaderTitle")
+        lay.addWidget(logo)
+        lay.addWidget(title)
+        lay.addStretch()
+        return h
 
     # ----- arrastar e soltar arquivos de áudio -----
     def dragEnterEvent(self, event):  # noqa: N802
@@ -212,6 +227,7 @@ class MainWindow(QMainWindow):
 
         top = QHBoxLayout()
         file_btn = QPushButton("🎧 Transcrever arquivo de áudio…")
+        file_btn.setObjectName("Primary")
         file_btn.clicked.connect(self._open_audio_file)
         top.addWidget(file_btn)
         top.addStretch()
@@ -220,7 +236,7 @@ class MainWindow(QMainWindow):
             "Ou arraste um áudio aqui (WhatsApp .opus, .mp3, .m4a, .wav…) "
             "para transcrever."
         )
-        hint.setStyleSheet("color: gray;")
+        hint.setObjectName("Muted")
         lay.addWidget(hint)
 
         lay.addWidget(QLabel("Dê duplo clique (ou use o botão) para copiar:"))
@@ -286,6 +302,7 @@ class MainWindow(QMainWindow):
         self.apikey_edit.setEchoMode(QLineEdit.Password)
         self.apikey_edit.setPlaceholderText("vazio = usa GROQ_API_KEY do ambiente")
         save_btn = QPushButton("Salvar")
+        save_btn.setObjectName("Primary")
         save_btn.clicked.connect(self._save_settings)
 
         form.addRow("Atalho:", self.hotkey_btn)
@@ -345,12 +362,12 @@ class TrayApp:
         self.controller = controller
         self.window = window
         self.icons = {
-            "idle": _dot_icon("#888888"),
-            "recording": _dot_icon("#e5484d"),
-            "transcribing": _dot_icon("#f5a623"),
+            "idle": tray_icon("idle"),
+            "recording": tray_icon("recording"),
+            "transcribing": tray_icon("transcribing"),
         }
         self.tray = QSystemTrayIcon(self.icons["idle"])
-        self.tray.setToolTip("Assistente de Voz — Pronto")
+        self.tray.setToolTip(f"{APP_NAME} — Pronto")
 
         menu = QMenu()
         open_action = QAction("Abrir", menu)
@@ -385,15 +402,15 @@ class TrayApp:
             "recording": "Gravando…",
             "transcribing": "Transcrevendo…",
         }
-        self.tray.setToolTip(f"Assistente de Voz — {tips.get(state, '')}")
+        self.tray.setToolTip(f"{APP_NAME} — {tips.get(state, '')}")
 
     def _on_file_busy(self, busy: bool) -> None:
         if busy:
             self.tray.setIcon(self.icons["transcribing"])
-            self.tray.setToolTip("Assistente de Voz — Transcrevendo arquivo…")
+            self.tray.setToolTip(f"{APP_NAME} — Transcrevendo arquivo…")
         else:
             self.tray.setIcon(self.icons["idle"])
-            self.tray.setToolTip("Assistente de Voz — Pronto")
+            self.tray.setToolTip(f"{APP_NAME} — Pronto")
 
     def _quit(self) -> None:
         self.controller.shutdown()

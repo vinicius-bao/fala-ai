@@ -5,7 +5,7 @@ from __future__ import annotations
 import sys
 
 _RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
-_VALUE = "AssistenteDeVoz"
+_VALUE = "FalaAI"
 
 
 def set_autostart(enabled: bool) -> None:
