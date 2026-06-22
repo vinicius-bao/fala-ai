@@ -30,7 +30,7 @@ from PySide6.QtWidgets import (
 
 from .app import Controller
 from .audiofile import SUPPORTED_EXTS, is_supported
-from .config import Config, save_config
+from .config import AI_NOTE, Config, save_config
 from .hotkey import parse_hotkey
 from .resources import app_icon, logo_pixmap, tray_icon
 
@@ -352,6 +352,10 @@ class MainWindow(QMainWindow):
         self.output_combo.setCurrentText(cfg.output_mode)
         self.restore_check = QCheckBox("Restaurar o clipboard anterior após colar")
         self.restore_check.setChecked(cfg.restore_clipboard)
+        self.ai_note_box = QCheckBox("Acrescentar aviso de IA ao final das transcrições")
+        self.ai_note_box.setChecked(cfg.ai_note_enabled)
+        self.ai_note_edit = QLineEdit(cfg.ai_note_text)
+        self.ai_note_edit.setPlaceholderText(AI_NOTE)
         self.history_spin = QSpinBox()
         self.history_spin.setRange(1, 1000)
         self.history_spin.setValue(cfg.history_size)
@@ -376,6 +380,8 @@ class MainWindow(QMainWindow):
         form.addRow("Idioma:", self.language_edit)
         form.addRow("Modo de saída:", self.output_combo)
         form.addRow("", self.restore_check)
+        form.addRow("", self.ai_note_box)
+        form.addRow("Texto do aviso:", self.ai_note_edit)
         form.addRow("Itens no histórico:", self.history_spin)
         form.addRow("", self.autostart_check)
         form.addRow("Modelo Groq:", self.model_edit)
@@ -397,6 +403,8 @@ class MainWindow(QMainWindow):
             groq_model=self.model_edit.text().strip() or "whisper-large-v3",
             groq_api_key=self.apikey_edit.text().strip(),
             check_updates_on_start=self.update_check_box.isChecked(),
+            ai_note_enabled=self.ai_note_box.isChecked(),
+            ai_note_text=self.ai_note_edit.text().strip() or AI_NOTE,
         )
         try:
             parse_hotkey(cfg.hotkey)

@@ -281,3 +281,10 @@ principalmente **mensagens de voz do WhatsApp**.
   encerrando o app). Há também "Abrir página" do release.
 - Como configurações/histórico/chave ficam em AppData (fora da instalação), eles
   sobrevivem às atualizações. Requer o projeto no GitHub com Releases.
+
+## 20. Adendo — Aviso de transcrição por IA (opcional)
+
+- Opção em Configurações: `ai_note_enabled` (liga/desliga) e `ai_note_text`
+  (texto personalizável; padrão em `AI_NOTE`). Quando ligado, o rótulo é
+  acrescentado ao final de toda transcrição (ditado e arquivo), via
+  `append_note` (puro, testado). Desligado por padrão.

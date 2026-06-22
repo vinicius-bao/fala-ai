@@ -3,7 +3,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from assistente_voz.config import Config, load_config, resolve_api_key, save_config
+from assistente_voz.config import (
+    Config,
+    append_note,
+    load_config,
+    resolve_api_key,
+    save_config,
+)
 
 
 class TestConfig(unittest.TestCase):
@@ -24,6 +30,12 @@ class TestConfig(unittest.TestCase):
             c = load_config(p)
             self.assertEqual(c.hotkey, "ctrl+shift+d")
             self.assertEqual(c.history_size, 7)
+
+    def test_append_note(self):
+        self.assertEqual(append_note("olá", "nota"), "olá\nnota")
+        self.assertEqual(append_note("  olá  ", "nota"), "olá\nnota")
+        self.assertEqual(append_note("", "nota"), "")     # sem texto, sem nota
+        self.assertEqual(append_note("olá", ""), "olá")   # nota vazia: texto puro
 
     def test_resolve_api_key_env_priority(self):
         old = os.environ.get("GROQ_API_KEY")

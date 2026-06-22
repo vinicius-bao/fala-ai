@@ -19,6 +19,9 @@ APP_NAME = "assistente-voz"
 # verificação de atualização desligada.
 DEFAULT_UPDATE_REPO = ""
 
+# Rótulo acrescentado ao final de toda transcrição.
+AI_NOTE = "transcrito por IA (pode ocorrer alguma divergência na fala)"
+
 
 @dataclass
 class Config:
@@ -33,6 +36,8 @@ class Config:
     groq_api_key: str = ""              # vazio => usa GROQ_API_KEY do ambiente
     update_repo: str = ""              # ex.: "usuario/fala-ai" (GitHub Releases)
     check_updates_on_start: bool = True
+    ai_note_enabled: bool = False     # acrescentar o rótulo de IA às transcrições
+    ai_note_text: str = AI_NOTE       # texto do rótulo (personalizável)
 
     @classmethod
     def from_dict(cls, data: dict) -> "Config":
@@ -81,3 +86,10 @@ def resolve_api_key(cfg: Config) -> str:
 def resolve_update_repo(cfg: Config) -> str:
     """Repositório de updates: override do config, senão o embutido no app."""
     return (cfg.update_repo or DEFAULT_UPDATE_REPO).strip()
+
+
+def append_note(text: str, note: str) -> str:
+    """Acrescenta um rótulo ao final do texto (se ambos forem não-vazios)."""
+    text = text.strip()
+    note = (note or "").strip()
+    return f"{text}\n{note}" if text and note else text

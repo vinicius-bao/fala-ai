@@ -14,7 +14,7 @@ from PySide6.QtCore import QObject, Qt, Signal
 
 from .activation import Action, Activation, State
 from .audio import Recorder
-from .config import Config, config_dir, resolve_api_key
+from .config import Config, append_note, config_dir, resolve_api_key
 from .history import History, Transcription
 from .hotkey import HotkeyListener
 from .output import TextOutput
@@ -162,6 +162,8 @@ class Controller(QObject):
         self._activation.on_transcription_done()
         text = text.strip()
         if text:
+            if self.config.ai_note_enabled:
+                text = append_note(text, self.config.ai_note_text)
             entry = Transcription.create(text, duration, "groq:" + self.config.groq_model)
             self.history.add(entry)
             self.historyChanged.emit()
@@ -212,6 +214,8 @@ class Controller(QObject):
         if not text:
             self.failed.emit("Transcrição vazia (o áudio tem fala?).")
             return
+        if self.config.ai_note_enabled:
+            text = append_note(text, self.config.ai_note_text)
         entry = Transcription.create(text, 0.0, "groq-file:" + self.config.groq_model)
         self.history.add(entry)
         self.historyChanged.emit()
