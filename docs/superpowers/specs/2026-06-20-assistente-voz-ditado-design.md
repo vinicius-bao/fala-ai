@@ -250,3 +250,20 @@ assistente-de-voz/
   README.md
   .gitignore
 ```
+
+## 18. Adendo — Transcrição de arquivos de áudio (drag-and-drop)
+
+Além do ditado ao vivo, o app transcreve arquivos de áudio já existentes,
+principalmente **mensagens de voz do WhatsApp**.
+
+- **Entrada:** arrastar-e-soltar o arquivo na janela, botão "Transcrever arquivo
+  de áudio…" na aba Histórico, ou item equivalente no menu da bandeja.
+- **Formatos:** `.opus`, `.ogg`, `.oga`, `.mp3`, `.m4a`, `.mp4`, `.wav`,
+  `.webm`, `.flac`, `.mpeg`, `.mpga` — enviados direto à Groq, **sem conversão**
+  (não precisa de ffmpeg). Limite ~25 MB.
+- **Resultado:** mostrado **dentro do app** (janela com o texto + botão Copiar) e
+  adicionado ao histórico. **Não cola** automaticamente nem sobrescreve o
+  clipboard (a cópia é manual, pelo botão).
+- **Módulo novo:** `audiofile.py` (validação de formato/tamanho e leitura), puro
+  e testado. O motor de transcrição ganhou o parâmetro `filename` para a Groq
+  detectar o formato. O fluxo de ditado por voz permanece inalterado.

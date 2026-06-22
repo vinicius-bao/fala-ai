@@ -60,6 +60,20 @@ mandá-lo para a bandeja; clique no ícone para reabrir.
 O atalho e todas as opções são configuráveis na aba *Configurações* — o atalho
 tem um capturador: clique em "Definir atalho" e pressione a combinação desejada.
 
+### Transcrever um áudio (ex.: mensagem de voz do WhatsApp)
+
+Além de ditar ao vivo, dá para transcrever arquivos de áudio que você já tem:
+
+1. Salve/baixe o áudio (a mensagem de voz do WhatsApp, por exemplo).
+2. **Arraste o arquivo para a janela** do app — ou use o botão *🎧 Transcrever
+   arquivo de áudio…* na aba *Histórico* (ou o item no menu da bandeja).
+3. A transcrição aparece **numa janela dentro do app** (com botão *Copiar*) e
+   também entra no *Histórico*.
+
+Formatos aceitos: `.opus`, `.ogg`, `.mp3`, `.m4a`, `.mp4`, `.wav`, `.webm`,
+`.flac` (enviados direto à Groq, sem conversão). Limite ~25 MB — folgado para
+mensagens de voz.
+
 ## Testes
 
 A lógica pura (máquina de estados, histórico, parsing do atalho, config) tem

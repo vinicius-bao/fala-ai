@@ -7,7 +7,9 @@ from typing import Protocol, runtime_checkable
 
 @runtime_checkable
 class TranscriptionEngine(Protocol):
-    def transcribe(self, wav_bytes: bytes, language: str = "pt") -> str: ...
+    def transcribe(
+        self, audio_bytes: bytes, language: str = "pt", filename: str = "audio.wav"
+    ) -> str: ...
 
 
 class GroqEngine:
@@ -21,9 +23,12 @@ class GroqEngine:
         self._client = Groq(api_key=api_key)
         self._model = model
 
-    def transcribe(self, wav_bytes: bytes, language: str = "pt") -> str:
+    def transcribe(
+        self, audio_bytes: bytes, language: str = "pt", filename: str = "audio.wav"
+    ) -> str:
+        # O nome do arquivo informa o formato à Groq (.opus/.ogg/.mp3/.wav...).
         resp = self._client.audio.transcriptions.create(
-            file=("audio.wav", wav_bytes),
+            file=(filename, audio_bytes),
             model=self._model,
             language=language,
             response_format="text",

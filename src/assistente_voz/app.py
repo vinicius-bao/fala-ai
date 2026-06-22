@@ -26,12 +26,16 @@ class Controller(QObject):
     transcribed = Signal(str)
     failed = Signal(str)
     historyChanged = Signal()
+    fileResult = Signal(str, str)       # transcrição de arquivo: (texto, nome)
+    fileBusy = Signal(bool)             # transcrevendo um arquivo
 
     # internos: trazem eventos de outras threads para a thread do Qt
     _hkStart = Signal()
     _hkRelease = Signal(float)
     _transcriptionReady = Signal(str, float)
     _transcriptionFailed = Signal(str, object)  # (mensagem, wav bytes)
+    _fileReady = Signal(str, str)
+    _fileFailed = Signal(str)
 
     def __init__(self, config: Config, history: History):
         super().__init__()
@@ -47,6 +51,8 @@ class Controller(QObject):
         self._hkRelease.connect(self._on_release, Qt.QueuedConnection)
         self._transcriptionReady.connect(self._on_ready, Qt.QueuedConnection)
         self._transcriptionFailed.connect(self._on_failed, Qt.QueuedConnection)
+        self._fileReady.connect(self._on_file_ready, Qt.QueuedConnection)
+        self._fileFailed.connect(self._on_file_failed, Qt.QueuedConnection)
 
     # ---- ciclo de vida ----
     def start(self) -> None:
@@ -160,6 +166,48 @@ class Controller(QObject):
         path = self._save_failed_audio(wav)
         self.failed.emit(f"Falha na transcrição: {message}\nÁudio salvo em: {path}")
         self._emit_state()
+
+    # ---- transcrição de arquivo de áudio (drag-and-drop / botão) ----
+    def transcribe_file(self, path: str) -> None:
+        from .audiofile import AudioFileError, read_audio
+
+        try:
+            data, name = read_audio(path)
+        except AudioFileError as e:
+            self.failed.emit(str(e))
+            return
+        if self._engine is None:
+            self._rebuild_engine()
+        if self._engine is None:
+            return
+        self.fileBusy.emit(True)
+        threading.Thread(
+            target=self._file_worker, args=(data, name), daemon=True
+        ).start()
+
+    def _file_worker(self, data: bytes, name: str) -> None:
+        try:
+            text = self._engine.transcribe(
+                data, language=self.config.language, filename=name
+            )
+            self._fileReady.emit(text, name)
+        except Exception as e:  # noqa: BLE001
+            self._fileFailed.emit(str(e))
+
+    def _on_file_ready(self, text: str, name: str) -> None:
+        self.fileBusy.emit(False)
+        text = text.strip()
+        if not text:
+            self.failed.emit("Transcrição vazia (o áudio tem fala?).")
+            return
+        entry = Transcription.create(text, 0.0, "groq-file:" + self.config.groq_model)
+        self.history.add(entry)
+        self.historyChanged.emit()
+        self.fileResult.emit(text, name)
+
+    def _on_file_failed(self, message: str) -> None:
+        self.fileBusy.emit(False)
+        self.failed.emit(f"Falha ao transcrever o arquivo: {message}")
 
     def _save_failed_audio(self, wav: bytes) -> str:
         try:

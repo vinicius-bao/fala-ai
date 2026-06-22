@@ -8,6 +8,8 @@ from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
     QComboBox,
+    QDialog,
+    QFileDialog,
     QFormLayout,
     QHBoxLayout,
     QLabel,
@@ -17,6 +19,7 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMenu,
     QMessageBox,
+    QPlainTextEdit,
     QPushButton,
     QSpinBox,
     QSystemTrayIcon,
@@ -26,6 +29,7 @@ from PySide6.QtWidgets import (
 )
 
 from .app import Controller
+from .audiofile import SUPPORTED_EXTS, is_supported
 from .config import Config, save_config
 from .hotkey import parse_hotkey
 
@@ -108,12 +112,40 @@ class HotkeyCaptureButton(QPushButton):
         self._refresh()
 
 
+class TranscriptionResultDialog(QDialog):
+    """Mostra a transcrição de um arquivo, dentro do app, com botão Copiar."""
+
+    def __init__(self, text: str, name: str, parent=None):
+        super().__init__(parent)
+        self._text = text
+        self.setWindowTitle(f"Transcrição — {name}")
+        self.resize(540, 380)
+        lay = QVBoxLayout(self)
+        lay.addWidget(QLabel(f"Áudio: {name}"))
+        view = QPlainTextEdit(text)
+        view.setReadOnly(True)
+        lay.addWidget(view)
+        row = QHBoxLayout()
+        row.addStretch()
+        copy_btn = QPushButton("Copiar")
+        copy_btn.clicked.connect(self._copy)
+        close_btn = QPushButton("Fechar")
+        close_btn.clicked.connect(self.accept)
+        row.addWidget(copy_btn)
+        row.addWidget(close_btn)
+        lay.addLayout(row)
+
+    def _copy(self) -> None:
+        QApplication.clipboard().setText(self._text)
+
+
 class MainWindow(QMainWindow):
     def __init__(self, controller: Controller):
         super().__init__()
         self.controller = controller
         self.setWindowTitle("Assistente de Voz")
         self.resize(580, 480)
+        self.setAcceptDrops(True)
 
         tabs = QTabWidget()
         tabs.addTab(self._history_tab(), "Histórico")
@@ -126,12 +158,71 @@ class MainWindow(QMainWindow):
         )
         controller.failed.connect(lambda m: self.statusBar().showMessage(m, 8000))
         controller.stateChanged.connect(self._on_state)
+        controller.fileResult.connect(self._show_file_result)
+        controller.fileBusy.connect(self._on_file_busy)
         self.refresh_history()
+
+    # ----- arrastar e soltar arquivos de áudio -----
+    def dragEnterEvent(self, event):  # noqa: N802
+        if event.mimeData().hasUrls() and any(
+            u.isLocalFile() and is_supported(u.toLocalFile())
+            for u in event.mimeData().urls()
+        ):
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dropEvent(self, event):  # noqa: N802
+        for url in event.mimeData().urls():
+            if not url.isLocalFile():
+                continue
+            path = url.toLocalFile()
+            if is_supported(path):
+                self.controller.transcribe_file(path)
+            else:
+                self.statusBar().showMessage(f"Formato não suportado: {path}", 5000)
+
+    def _open_audio_file(self) -> None:
+        patterns = " ".join(f"*{e}" for e in sorted(SUPPORTED_EXTS))
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Escolher áudio para transcrever",
+            "",
+            f"Áudio ({patterns});;Todos os arquivos (*.*)",
+        )
+        if path:
+            self.controller.transcribe_file(path)
+
+    def _show_file_result(self, text: str, name: str) -> None:
+        self.show()
+        self.raise_()
+        self.activateWindow()
+        TranscriptionResultDialog(text, name, self).exec()
+
+    def _on_file_busy(self, busy: bool) -> None:
+        if busy:
+            self.statusBar().showMessage("⏳ Transcrevendo arquivo…")
+        else:
+            self.statusBar().showMessage("Pronto", 3000)
 
     # ----- aba Histórico -----
     def _history_tab(self) -> QWidget:
         w = QWidget()
         lay = QVBoxLayout(w)
+
+        top = QHBoxLayout()
+        file_btn = QPushButton("🎧 Transcrever arquivo de áudio…")
+        file_btn.clicked.connect(self._open_audio_file)
+        top.addWidget(file_btn)
+        top.addStretch()
+        lay.addLayout(top)
+        hint = QLabel(
+            "Ou arraste um áudio aqui (WhatsApp .opus, .mp3, .m4a, .wav…) "
+            "para transcrever."
+        )
+        hint.setStyleSheet("color: gray;")
+        lay.addWidget(hint)
+
         lay.addWidget(QLabel("Dê duplo clique (ou use o botão) para copiar:"))
         self.history_list = QListWidget()
         self.history_list.itemDoubleClicked.connect(self._copy_item)
@@ -264,14 +355,18 @@ class TrayApp:
         menu = QMenu()
         open_action = QAction("Abrir", menu)
         open_action.triggered.connect(self.show_window)
+        file_action = QAction("Transcrever arquivo de áudio…", menu)
+        file_action.triggered.connect(window._open_audio_file)
         quit_action = QAction("Sair", menu)
         quit_action.triggered.connect(self._quit)
         menu.addAction(open_action)
+        menu.addAction(file_action)
         menu.addSeparator()
         menu.addAction(quit_action)
         self.tray.setContextMenu(menu)
         self.tray.activated.connect(self._on_activated)
         controller.stateChanged.connect(self._on_state)
+        controller.fileBusy.connect(self._on_file_busy)
         self.tray.show()
 
     def _on_activated(self, reason) -> None:
@@ -291,6 +386,14 @@ class TrayApp:
             "transcribing": "Transcrevendo…",
         }
         self.tray.setToolTip(f"Assistente de Voz — {tips.get(state, '')}")
+
+    def _on_file_busy(self, busy: bool) -> None:
+        if busy:
+            self.tray.setIcon(self.icons["transcribing"])
+            self.tray.setToolTip("Assistente de Voz — Transcrevendo arquivo…")
+        else:
+            self.tray.setIcon(self.icons["idle"])
+            self.tray.setToolTip("Assistente de Voz — Pronto")
 
     def _quit(self) -> None:
         self.controller.shutdown()
