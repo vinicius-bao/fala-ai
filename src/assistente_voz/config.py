@@ -17,7 +17,7 @@ APP_NAME = "assistente-voz"
 # Repositório de atualização embutido no app (o usuário final NÃO configura isto).
 # Defina como "usuario/repositorio" do GitHub quando o repo existir. Vazio =
 # verificação de atualização desligada.
-DEFAULT_UPDATE_REPO = ""
+DEFAULT_UPDATE_REPO = "vinicius-bao/fala-ai"
 
 # Rótulo acrescentado ao final de toda transcrição.
 AI_NOTE = "transcrito por IA (pode ocorrer alguma divergência na fala)"
