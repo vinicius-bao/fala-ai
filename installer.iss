@@ -3,7 +3,9 @@
 ; Download do Inno Setup: https://jrsoftware.org/isdl.php
 
 #define AppName "Fala AI"
-#define AppVersion "0.1.0"
+#ifndef AppVersion
+  #define AppVersion "0.1.0"
+#endif
 #define AppExe "FalaAI.exe"
 
 [Setup]

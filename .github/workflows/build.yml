@@ -1,0 +1,68 @@
+name: build
+
+on:
+  workflow_dispatch:        # rodar manualmente pelo site do GitHub
+  push:
+    tags: ["v*"]            # ao criar uma tag de versão (ex.: v0.2.0)
+
+permissions:
+  contents: write           # necessário para publicar o Release
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Instalar dependencias
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Testes
+        run: python -m unittest discover -s tests
+
+      - name: Definir versao (a partir da tag)
+        id: ver
+        shell: pwsh
+        run: |
+          $ver = "${{ github.ref_name }}" -replace '^v',''
+          if ("${{ github.ref_type }}" -ne "tag" -or -not $ver) { $ver = "0.1.0" }
+          "version=$ver" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          (Get-Content src/assistente_voz/__init__.py) `
+            -replace '__version__ = ".*"', "__version__ = `"$ver`"" `
+            | Set-Content src/assistente_voz/__init__.py
+
+      - name: Gerar icone
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python tools/make_icon.py
+
+      - name: PyInstaller
+        run: pyinstaller --noconfirm FalaAI.spec
+
+      - name: Instalar Inno Setup
+        run: choco install innosetup -y --no-progress
+
+      - name: Gerar instalador
+        shell: pwsh
+        run: |
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" `
+            /DAppVersion=${{ steps.ver.outputs.version }} installer.iss
+
+      - name: Upload do instalador (artefato)
+        uses: actions/upload-artifact@v4
+        with:
+          name: FalaAI-Setup
+          path: installer/FalaAI-Setup.exe
+
+      - name: Publicar Release (somente em tag)
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: installer/FalaAI-Setup.exe
+          generate_release_notes: true
