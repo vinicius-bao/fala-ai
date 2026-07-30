@@ -17,7 +17,7 @@ for pkg in ("groq", "sounddevice", "pynput", "pyperclip", "platformdirs", "doten
     binaries += b
     hiddenimports += h
 hiddenimports += collect_submodules("assistente_voz")
-hiddenimports += ["PySide6.QtSvg"]
+hiddenimports += ["PySide6.QtSvg", "PySide6.QtNetwork"]
 
 # Inclui a pasta assets/ no app empacotado.
 if os.path.isdir("assets"):

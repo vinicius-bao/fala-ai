@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QApplication,
@@ -174,6 +174,8 @@ class UpdateDialog(QDialog):
 
 
 class MainWindow(QMainWindow):
+    minimizedToTray = Signal()
+
     def __init__(self, controller: Controller):
         super().__init__()
         self.controller = controller
@@ -432,6 +434,7 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event):  # noqa: N802 — fecha para a bandeja
         event.ignore()
         self.hide()
+        self.minimizedToTray.emit()
 
 
 class TrayApp:
@@ -464,6 +467,8 @@ class TrayApp:
         self.tray.activated.connect(self._on_activated)
         controller.stateChanged.connect(self._on_state)
         controller.fileBusy.connect(self._on_file_busy)
+        self._notified = False
+        window.minimizedToTray.connect(self._notify_minimized)
         self.tray.show()
 
     def _on_activated(self, reason) -> None:
@@ -491,6 +496,17 @@ class TrayApp:
         else:
             self.tray.setIcon(self.icons["idle"])
             self.tray.setToolTip(f"{APP_NAME} — Pronto")
+
+    def _notify_minimized(self) -> None:
+        if self._notified:
+            return
+        self._notified = True
+        self.tray.showMessage(
+            "Fala AI",
+            "Continuo rodando aqui. Clique no ícone (ou no app) para reabrir.",
+            QSystemTrayIcon.MessageIcon.Information,
+            4000,
+        )
 
     def _quit(self) -> None:
         self.controller.shutdown()

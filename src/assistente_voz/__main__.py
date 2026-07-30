@@ -19,7 +19,8 @@ def main() -> int:
 
     load_dotenv()  # carrega GROQ_API_KEY do .env, se existir
 
-    from PySide6.QtCore import QSharedMemory, Qt, QTimer
+    from PySide6.QtCore import Qt, QTimer
+    from PySide6.QtNetwork import QLocalServer, QLocalSocket
     from PySide6.QtWidgets import QApplication, QMessageBox, QSystemTrayIcon
 
     from .app import Controller
@@ -34,15 +35,19 @@ def main() -> int:
     app.setQuitOnLastWindowClosed(False)  # vive na bandeja
     app.setWindowIcon(app_icon())
 
-    # Instância única: evita 2+ Fala AI rodando e colando o texto várias vezes.
-    lock = QSharedMemory("FalaAI-SingleInstance-v1")
-    if not lock.create(1):
-        QMessageBox.information(
-            None,
-            "Fala AI",
-            "O Fala AI já está em execução. Veja o ícone na bandeja, perto do relógio.",
-        )
+    # Instância única: se já houver um Fala AI rodando, manda ele aparecer e sai.
+    ipc_name = "FalaAI-SingleInstance"
+    probe = QLocalSocket()
+    probe.connectToServer(ipc_name)
+    if probe.waitForConnected(300):
+        probe.write(b"show")
+        probe.flush()
+        probe.waitForBytesWritten(500)
+        probe.disconnectFromServer()
         return 0
+    QLocalServer.removeServer(ipc_name)  # limpa socket órfão de um crash
+    instance_server = QLocalServer()
+    instance_server.listen(ipc_name)
 
     # Tema automático: segue o claro/escuro do Windows e reage a mudanças.
     hints = app.styleHints()
@@ -70,6 +75,16 @@ def main() -> int:
     window = MainWindow(controller)
     TrayApp(controller, window)
     controller.quitRequested.connect(app.quit)
+
+    def _activate_window() -> None:
+        conn = instance_server.nextPendingConnection()
+        if conn is not None:
+            conn.close()
+        window.showNormal()
+        window.raise_()
+        window.activateWindow()
+
+    instance_server.newConnection.connect(_activate_window)
     controller.start()
 
     # Verifica atualizações alguns segundos após iniciar (se configurado).
