@@ -181,7 +181,7 @@ def _section(title: str) -> tuple[QFrame, QFormLayout]:
 class HistoryCard(QFrame):
     """Item do histórico: hora, texto e botão de copiar."""
 
-    def __init__(self, time_text: str, text: str, on_copy, text_width=380, parent=None):
+    def __init__(self, time_text: str, text: str, on_copy, parent=None):
         super().__init__(parent)
         self.setObjectName("HistoryCard")
         self.setMinimumHeight(50)
@@ -190,15 +190,14 @@ class HistoryCard(QFrame):
         lay.setSpacing(10)
         stamp = QLabel(time_text)
         stamp.setObjectName("TimePill")
+        self._full = " ".join(text.split())
         body = QLabel()
         body.setObjectName("CardText")
-        # Elide pela largura real disponível — senão o cartão estoura a lista.
-        preview = " ".join(text.split())
-        body.setText(
-            body.fontMetrics().elidedText(preview, Qt.ElideRight, max(80, text_width))
-        )
+        # Sem largura fixa: o texto é cortado conforme o espaço real do cartão
+        # (calculado no resize), então nunca estoura a lista.
         body.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         body.setToolTip(text)
+        self._body = body
         copy_btn = QPushButton()
         copy_btn.setObjectName("IconBtn")
         copy_btn.setCursor(Qt.PointingHandCursor)
@@ -209,6 +208,21 @@ class HistoryCard(QFrame):
         lay.addWidget(stamp)
         lay.addWidget(body, 1)
         lay.addWidget(copy_btn)
+
+    def _elide(self) -> None:
+        w = self._body.width()
+        if w > 1:
+            self._body.setText(
+                self._body.fontMetrics().elidedText(self._full, Qt.ElideRight, w)
+            )
+
+    def resizeEvent(self, event):  # noqa: N802
+        super().resizeEvent(event)
+        self._elide()
+
+    def showEvent(self, event):  # noqa: N802
+        super().showEvent(event)
+        self._elide()
 
 
 class HotkeyCaptureButton(QPushButton):
@@ -576,7 +590,11 @@ class MainWindow(QMainWindow):
         self.history_list.setObjectName("HistoryList")
         self.history_list.setSpacing(6)
         self.history_list.setSelectionMode(QAbstractItemView.NoSelection)
+        # Sem barras visíveis: a roda do mouse continua rolando, e a largura da
+        # área visível para de mudar (era o que cortava os cartões).
         self.history_list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.history_list.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.history_list.setVerticalScrollMode(QAbstractItemView.ScrollPerPixel)
         lay.addWidget(self.history_list, 1)
 
         self.empty_label = QLabel("Nada por aqui ainda — grave algo para começar.")
@@ -590,20 +608,14 @@ class MainWindow(QMainWindow):
         entries = self.controller.history.recent(self.controller.config.history_size)
         self.empty_label.setVisible(not entries)
         self.history_list.setVisible(bool(entries))
-        avail = self.history_list.viewport().width() or (self.width() - 60)
-        text_w = max(120, avail - 150)  # desconta hora, botão copiar e margens
         for entry in entries:
             stamp = entry.timestamp[11:16] if len(entry.timestamp) >= 16 else ""
-            card = HistoryCard(stamp, entry.text, self._copy_text, text_w)
+            card = HistoryCard(stamp, entry.text, self._copy_text)
             item = QListWidgetItem()
-            item.setSizeHint(QSize(avail - 18, max(50, card.sizeHint().height())))
+            # Largura 1: a lista estica o item até a área visível sozinha.
+            item.setSizeHint(QSize(1, max(50, card.sizeHint().height())))
             self.history_list.addItem(item)
             self.history_list.setItemWidget(item, card)
-
-    def resizeEvent(self, event):  # noqa: N802 — recalcula a elisão dos cartões
-        super().resizeEvent(event)
-        if hasattr(self, "history_list"):
-            self.refresh_history()
 
     def _copy_text(self, text: str) -> None:
         QApplication.clipboard().setText(text)
@@ -798,6 +810,8 @@ class MainWindow(QMainWindow):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         scroll.setWidget(page)
         return scroll
 
