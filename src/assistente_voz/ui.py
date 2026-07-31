@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QAction
+from PySide6.QtCore import QRectF, QSize, Qt, Signal
+from PySide6.QtGui import QAction, QColor, QLinearGradient, QPainter
 from PySide6.QtWidgets import (
+    QAbstractItemView,
     QApplication,
     QCheckBox,
     QComboBox,
     QDialog,
     QFileDialog,
     QFormLayout,
+    QFrame,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -22,6 +24,7 @@ from PySide6.QtWidgets import (
     QPlainTextEdit,
     QPushButton,
     QScrollArea,
+    QSizePolicy,
     QSpinBox,
     QSystemTrayIcon,
     QTabWidget,
@@ -29,6 +32,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from . import icons
 from .app import Controller
 from .audiofile import SUPPORTED_EXTS, is_supported
 from .config import (
@@ -41,10 +45,12 @@ from .config import (
     Config,
     save_config,
 )
-from .hotkey import parse_hotkey
+from .hotkey import parse_hotkey, pretty_hotkey
 from .resources import app_icon, logo_pixmap, tray_icon
 
 APP_NAME = "Fala AI"
+BRAND = ("#BD619D", "#B48BB9", "#FBB03B")
+DANGER = "#E5484D"
 
 
 def _qt_key_to_token(key: int) -> str:
@@ -66,6 +72,128 @@ def _qt_key_to_token(key: int) -> str:
     return special.get(key, "")
 
 
+class RecordButton(QPushButton):
+    """Botão circular pintado à mão (gradiente da marca / vermelho ao gravar)."""
+
+    def __init__(self, diameter: int = 88, parent=None):
+        super().__init__(parent)
+        self.setCursor(Qt.PointingHandCursor)
+        self.setFlat(True)
+        # O min-height do QSS global sobrepõe setFixedSize; por isso o tamanho
+        # também vai no stylesheet do próprio widget (e o fixed size vem depois).
+        self.setStyleSheet(
+            "border:none;background:transparent;padding:0;"
+            f"min-width:{diameter}px;min-height:{diameter}px;"
+            f"max-width:{diameter}px;max-height:{diameter}px;"
+        )
+        self.setFixedSize(diameter, diameter)
+        self._recording = False
+
+    def set_recording(self, value: bool) -> None:
+        self._recording = value
+        self.setToolTip("Parar gravação" if value else "Iniciar gravação")
+        self.update()
+
+    def paintEvent(self, event):  # noqa: N802
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        s = float(min(self.width(), self.height()))
+        pad = s * 0.06                      # espaço para o halo
+        circle = QRectF(pad, pad, s - 2 * pad, s - 2 * pad)
+
+        halo = QColor(DANGER if self._recording else BRAND[0])
+        halo.setAlpha(60 if self.underMouse() else 38)
+        p.setPen(Qt.NoPen)
+        p.setBrush(halo)
+        p.drawEllipse(QRectF(0, 0, s, s))
+
+        if self._recording:
+            p.setBrush(QColor(DANGER))
+        else:
+            grad = QLinearGradient(circle.left(), circle.bottom(),
+                                   circle.right(), circle.top())
+            grad.setColorAt(0.0, QColor(BRAND[0]))
+            grad.setColorAt(0.5, QColor(BRAND[1]))
+            grad.setColorAt(1.0, QColor(BRAND[2]))
+            p.setBrush(grad)
+        p.drawEllipse(circle)
+
+        glyph = s * 0.46
+        p.translate((s - glyph) / 2, (s - glyph) / 2)
+        icons.draw("stop" if self._recording else "mic", p, glyph, QColor("#FFFFFF"))
+        p.end()
+
+    def enterEvent(self, event):  # noqa: N802
+        self.update()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):  # noqa: N802
+        self.update()
+        super().leaveEvent(event)
+
+
+def _chip(text: str, icon_name: str, on_click) -> QPushButton:
+    btn = QPushButton("  " + text)
+    btn.setObjectName("Chip")
+    btn.setCursor(Qt.PointingHandCursor)
+    btn.setIcon(icons.icon(icon_name, 18, "#9A93A6"))
+    if on_click is not None:
+        btn.clicked.connect(on_click)
+    return btn
+
+
+def _section(title: str) -> tuple[QFrame, QFormLayout]:
+    """Cartão de seção com título; devolve (frame, form) para preencher."""
+    card = QFrame()
+    card.setObjectName("Card")
+    box = QVBoxLayout(card)
+    box.setContentsMargins(16, 14, 16, 16)
+    box.setSpacing(10)
+    label = QLabel(title)
+    label.setObjectName("SectionTitle")
+    box.addWidget(label)
+    form = QFormLayout()
+    form.setLabelAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+    form.setFormAlignment(Qt.AlignTop)
+    form.setHorizontalSpacing(14)
+    form.setVerticalSpacing(10)
+    box.addLayout(form)
+    return card, form
+
+
+class HistoryCard(QFrame):
+    """Item do histórico: hora, texto e botão de copiar."""
+
+    def __init__(self, time_text: str, text: str, on_copy, text_width=380, parent=None):
+        super().__init__(parent)
+        self.setObjectName("HistoryCard")
+        self.setMinimumHeight(50)
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(12, 10, 10, 10)
+        lay.setSpacing(10)
+        stamp = QLabel(time_text)
+        stamp.setObjectName("TimePill")
+        body = QLabel()
+        body.setObjectName("CardText")
+        # Elide pela largura real disponível — senão o cartão estoura a lista.
+        preview = " ".join(text.split())
+        body.setText(
+            body.fontMetrics().elidedText(preview, Qt.ElideRight, max(80, text_width))
+        )
+        body.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        body.setToolTip(text)
+        copy_btn = QPushButton()
+        copy_btn.setObjectName("IconBtn")
+        copy_btn.setCursor(Qt.PointingHandCursor)
+        copy_btn.setIcon(icons.icon("copy", 18, "#9A93A6"))
+        copy_btn.setFixedSize(30, 30)
+        copy_btn.setToolTip("Copiar")
+        copy_btn.clicked.connect(lambda: on_copy(text))
+        lay.addWidget(stamp)
+        lay.addWidget(body, 1)
+        lay.addWidget(copy_btn)
+
+
 class HotkeyCaptureButton(QPushButton):
     """Captura a próxima combinação pressionada e a grava como atalho."""
 
@@ -73,6 +201,7 @@ class HotkeyCaptureButton(QPushButton):
         super().__init__(parent)
         self._value = value
         self._capturing = False
+        self.setCursor(Qt.PointingHandCursor)
         self._refresh()
         self.clicked.connect(self._begin)
 
@@ -80,7 +209,9 @@ class HotkeyCaptureButton(QPushButton):
         return self._value
 
     def _refresh(self) -> None:
-        self.setText("Pressione o atalho…" if self._capturing else self._value)
+        self.setText(
+            "Pressione a combinação…" if self._capturing else pretty_hotkey(self._value)
+        )
 
     def _begin(self) -> None:
         self._capturing = True
@@ -121,15 +252,20 @@ class TranscriptionResultDialog(QDialog):
         self._text = text
         self.setWindowTitle(f"{APP_NAME} — {name}")
         self.setWindowIcon(app_icon())
-        self.resize(540, 380)
+        self.resize(560, 400)
         lay = QVBoxLayout(self)
-        lay.addWidget(QLabel(f"Áudio: {name}"))
+        lay.setContentsMargins(18, 18, 18, 18)
+        lay.setSpacing(12)
+        head = QLabel(name)
+        head.setObjectName("SectionTitle")
+        lay.addWidget(head)
         view = QPlainTextEdit(text)
         view.setReadOnly(True)
         lay.addWidget(view)
         row = QHBoxLayout()
         row.addStretch()
         copy_btn = QPushButton("Copiar")
+        copy_btn.setObjectName("Primary")
         copy_btn.clicked.connect(self._copy)
         close_btn = QPushButton("Fechar")
         close_btn.clicked.connect(self.accept)
@@ -150,9 +286,13 @@ class UpdateDialog(QDialog):
         self._controller = controller
         self.setWindowTitle("Atualização disponível")
         self.setWindowIcon(app_icon())
-        self.resize(480, 360)
+        self.resize(500, 380)
         lay = QVBoxLayout(self)
-        lay.addWidget(QLabel(f"Nova versão disponível: {rel.version}"))
+        lay.setContentsMargins(18, 18, 18, 18)
+        lay.setSpacing(12)
+        head = QLabel(f"Nova versão disponível: {rel.version}")
+        head.setObjectName("SectionTitle")
+        lay.addWidget(head)
         notes = QPlainTextEdit(rel.notes or "(sem notas de versão)")
         notes.setReadOnly(True)
         lay.addWidget(notes)
@@ -191,7 +331,7 @@ class MainWindow(QMainWindow):
         self.controller = controller
         self.setWindowTitle(APP_NAME)
         self.setWindowIcon(app_icon())
-        self.resize(580, 500)
+        self.resize(620, 640)
         self.setAcceptDrops(True)
 
         tabs = QTabWidget()
@@ -204,7 +344,7 @@ class MainWindow(QMainWindow):
         outer.setSpacing(0)
         outer.addWidget(self._header())
         outer.addWidget(self._hero())
-        outer.addWidget(tabs)
+        outer.addWidget(tabs, 1)
         self.setCentralWidget(central)
 
         controller.historyChanged.connect(self.refresh_history)
@@ -217,7 +357,7 @@ class MainWindow(QMainWindow):
         controller.fileBusy.connect(self._on_file_busy)
         controller.refineBusy.connect(
             lambda b: self.statusBar().showMessage(
-                "✨ Refinando…" if b else "Pronto", 0 if b else 3000
+                "Refinando…" if b else "Pronto", 0 if b else 3000
             )
         )
         controller.updateAvailable.connect(self._show_update)
@@ -240,14 +380,15 @@ class MainWindow(QMainWindow):
         self.activateWindow()
         UpdateDialog(rel, self.controller, self).exec()
 
+    # ----- cabeçalho e herói -----
     def _header(self) -> QWidget:
         h = QWidget()
         h.setObjectName("Header")
         lay = QHBoxLayout(h)
-        lay.setContentsMargins(16, 12, 16, 12)
+        lay.setContentsMargins(18, 14, 18, 14)
         lay.setSpacing(10)
         logo = QLabel()
-        logo.setPixmap(logo_pixmap(34))
+        logo.setPixmap(logo_pixmap(30))
         title = QLabel(APP_NAME)
         title.setObjectName("HeaderTitle")
         from . import __version__
@@ -264,28 +405,44 @@ class MainWindow(QMainWindow):
         w = QWidget()
         w.setObjectName("Hero")
         v = QVBoxLayout(w)
-        v.setContentsMargins(16, 16, 16, 12)
-        v.setSpacing(8)
-        self.record_btn = QPushButton("🎙️")
-        self.record_btn.setObjectName("RecordBig")
-        self.record_btn.setFixedSize(76, 76)
+        v.setContentsMargins(18, 22, 18, 18)
+        v.setSpacing(14)
+
+        self.record_btn = RecordButton(88)
         self.record_btn.clicked.connect(self.controller.toggle_recording)
         v.addWidget(self.record_btn, alignment=Qt.AlignHCenter)
-        hint = QLabel(
-            f"Atalho {self.controller.config.hotkey}  ·  ou clique para gravar"
-        )
-        hint.setObjectName("Muted")
-        hint.setAlignment(Qt.AlignHCenter)
-        v.addWidget(hint)
+
+        self.hero_hint = QLabel()
+        self.hero_hint.setObjectName("Muted")
+        self.hero_hint.setAlignment(Qt.AlignHCenter)
+        self.hero_hint.setTextFormat(Qt.RichText)
+        self._refresh_hint()
+        v.addWidget(self.hero_hint)
+
         row = QHBoxLayout()
+        row.setSpacing(10)
         row.addStretch()
-        file_btn = QPushButton("🎧  Transcrever arquivo…")
-        file_btn.setObjectName("Primary")
-        file_btn.clicked.connect(self._open_audio_file)
-        row.addWidget(file_btn)
+        row.addWidget(
+            _chip("Transcrever arquivo", "headphones", self._open_audio_file)
+        )
+        self.refine_chip = _chip("Refino", "sparkle", None)
+        self.refine_chip.setEnabled(False)
+        self.refine_chip.setCursor(Qt.ArrowCursor)
+        row.addWidget(self.refine_chip)
         row.addStretch()
         v.addLayout(row)
+        self._refresh_hint()  # agora o chip já existe: mostra o atalho de refino
         return w
+
+    def _refresh_hint(self) -> None:
+        cfg = self.controller.config
+        key = pretty_hotkey(cfg.hotkey)
+        self.hero_hint.setText(
+            f"Segure <b>{key}</b> &nbsp;ou clique para gravar"
+        )
+        if hasattr(self, "refine_chip"):
+            rk = pretty_hotkey(cfg.refine_hotkey) if cfg.refine_hotkey else "—"
+            self.refine_chip.setText(f"  Refino: {rk}")
 
     # ----- arrastar e soltar arquivos de áudio -----
     def dragEnterEvent(self, event):  # noqa: N802
@@ -326,7 +483,7 @@ class MainWindow(QMainWindow):
 
     def _on_file_busy(self, busy: bool) -> None:
         if busy:
-            self.statusBar().showMessage("⏳ Transcrevendo arquivo…")
+            self.statusBar().showMessage("Transcrevendo arquivo…")
         else:
             self.statusBar().showMessage("Pronto", 3000)
 
@@ -334,55 +491,79 @@ class MainWindow(QMainWindow):
     def _history_tab(self) -> QWidget:
         w = QWidget()
         lay = QVBoxLayout(w)
+        lay.setContentsMargins(16, 14, 16, 14)
+        lay.setSpacing(10)
 
-        hint = QLabel(
-            "Arraste um áudio aqui (WhatsApp .opus, .mp3, .m4a, .wav…) "
-            "para transcrever."
-        )
+        top = QHBoxLayout()
+        hint = QLabel("Arraste um áudio aqui para transcrever")
         hint.setObjectName("Muted")
-        lay.addWidget(hint)
-
-        lay.addWidget(QLabel("Dê duplo clique (ou use o botão) para copiar:"))
-        self.history_list = QListWidget()
-        self.history_list.itemDoubleClicked.connect(self._copy_item)
-        lay.addWidget(self.history_list)
-        row = QHBoxLayout()
-        copy_btn = QPushButton("Copiar selecionado")
-        copy_btn.clicked.connect(self._copy_selected)
-        clear_btn = QPushButton("Limpar histórico")
+        clear_btn = QPushButton()
+        clear_btn.setObjectName("IconBtn")
+        clear_btn.setIcon(icons.icon("trash", 18, "#9A93A6"))
+        clear_btn.setFixedSize(30, 30)
+        clear_btn.setCursor(Qt.PointingHandCursor)
+        clear_btn.setToolTip("Limpar histórico")
         clear_btn.clicked.connect(self._clear_history)
-        row.addWidget(copy_btn)
-        row.addWidget(clear_btn)
-        row.addStretch()
-        lay.addLayout(row)
+        top.addWidget(hint)
+        top.addStretch()
+        top.addWidget(clear_btn)
+        lay.addLayout(top)
+
+        self.history_list = QListWidget()
+        self.history_list.setObjectName("HistoryList")
+        self.history_list.setSpacing(6)
+        self.history_list.setSelectionMode(QAbstractItemView.NoSelection)
+        self.history_list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        lay.addWidget(self.history_list, 1)
+
+        self.empty_label = QLabel("Nada por aqui ainda — grave algo para começar.")
+        self.empty_label.setObjectName("Muted")
+        self.empty_label.setAlignment(Qt.AlignCenter)
+        lay.addWidget(self.empty_label)
         return w
 
     def refresh_history(self) -> None:
         self.history_list.clear()
-        for entry in self.controller.history.recent(self.controller.config.history_size):
-            item = QListWidgetItem(f"[{entry.timestamp}]  {entry.text}")
-            item.setData(Qt.UserRole, entry.text)
+        entries = self.controller.history.recent(self.controller.config.history_size)
+        self.empty_label.setVisible(not entries)
+        self.history_list.setVisible(bool(entries))
+        avail = self.history_list.viewport().width() or (self.width() - 60)
+        text_w = max(120, avail - 150)  # desconta hora, botão copiar e margens
+        for entry in entries:
+            stamp = entry.timestamp[11:16] if len(entry.timestamp) >= 16 else ""
+            card = HistoryCard(stamp, entry.text, self._copy_text, text_w)
+            item = QListWidgetItem()
+            item.setSizeHint(QSize(avail - 18, max(50, card.sizeHint().height())))
             self.history_list.addItem(item)
+            self.history_list.setItemWidget(item, card)
 
-    def _copy_item(self, item: QListWidgetItem) -> None:
-        QApplication.clipboard().setText(item.data(Qt.UserRole))
+    def resizeEvent(self, event):  # noqa: N802 — recalcula a elisão dos cartões
+        super().resizeEvent(event)
+        if hasattr(self, "history_list"):
+            self.refresh_history()
+
+    def _copy_text(self, text: str) -> None:
+        QApplication.clipboard().setText(text)
         self.statusBar().showMessage("Copiado!", 2000)
 
-    def _copy_selected(self) -> None:
-        item = self.history_list.currentItem()
-        if item:
-            self._copy_item(item)
-
     def _clear_history(self) -> None:
-        self.controller.history.clear()
-        self.refresh_history()
+        if (
+            QMessageBox.question(self, "Limpar histórico", "Apagar todo o histórico?")
+            == QMessageBox.Yes
+        ):
+            self.controller.history.clear()
+            self.refresh_history()
 
     # ----- aba Configurações -----
     def _settings_tab(self) -> QWidget:
         cfg = self.controller.config
-        w = QWidget()
-        form = QFormLayout(w)
+        page = QWidget()
+        col = QVBoxLayout(page)
+        col.setContentsMargins(16, 14, 16, 14)
+        col.setSpacing(12)
 
+        # --- Gravação ---
+        card, form = _section("Gravação")
         self.hotkey_btn = HotkeyCaptureButton(cfg.hotkey)
         self.threshold_spin = QSpinBox()
         self.threshold_spin.setRange(100, 2000)
@@ -390,18 +571,32 @@ class MainWindow(QMainWindow):
         self.threshold_spin.setValue(cfg.tap_threshold_ms)
         self.threshold_spin.setSuffix(" ms")
         self.language_edit = QLineEdit(cfg.language)
+        form.addRow("Atalho", self.hotkey_btn)
+        form.addRow("Limiar toque/segurar", self.threshold_spin)
+        form.addRow("Idioma", self.language_edit)
+        col.addWidget(card)
+
+        # --- Aparência ---
+        card, form = _section("Aparência")
         self.theme_combo = QComboBox()
         self.theme_combo.addItem("Automático (segue o Windows)", "auto")
         self.theme_combo.addItem("Claro", "light")
         self.theme_combo.addItem("Escuro", "dark")
         _ti = self.theme_combo.findData(cfg.theme_mode)
         self.theme_combo.setCurrentIndex(_ti if _ti >= 0 else 0)
+        form.addRow("Tema", self.theme_combo)
+        col.addWidget(card)
+
+        # --- Saída do texto ---
+        card, form = _section("Saída do texto")
         self.output_combo = QComboBox()
-        self.output_combo.addItems(["paste", "clipboard_only"])
-        self.output_combo.setCurrentText(cfg.output_mode)
+        self.output_combo.addItem("Colar onde o cursor estiver", "paste")
+        self.output_combo.addItem("Somente copiar", "clipboard_only")
+        _oi = self.output_combo.findData(cfg.output_mode)
+        self.output_combo.setCurrentIndex(_oi if _oi >= 0 else 0)
         self.restore_check = QCheckBox("Restaurar o clipboard anterior após colar")
         self.restore_check.setChecked(cfg.restore_clipboard)
-        self.ai_note_box = QCheckBox("Acrescentar aviso de IA ao final das transcrições")
+        self.ai_note_box = QCheckBox("Acrescentar aviso de IA ao final")
         self.ai_note_box.setChecked(cfg.ai_note_enabled)
         self.ai_note_edit = QLineEdit(cfg.ai_note_text)
         self.ai_note_edit.setPlaceholderText(AI_NOTE)
@@ -410,6 +605,16 @@ class MainWindow(QMainWindow):
         self.history_spin.setValue(cfg.history_size)
         self.autostart_check = QCheckBox("Iniciar com o Windows")
         self.autostart_check.setChecked(cfg.autostart)
+        form.addRow("Modo", self.output_combo)
+        form.addRow("", self.restore_check)
+        form.addRow("", self.ai_note_box)
+        form.addRow("Texto do aviso", self.ai_note_edit)
+        form.addRow("Itens no histórico", self.history_spin)
+        form.addRow("", self.autostart_check)
+        col.addWidget(card)
+
+        # --- Transcrição ---
+        card, form = _section("Transcrição")
         self._prov_keys = {
             "groq": cfg.groq_api_key,
             "openai": cfg.openai_api_key,
@@ -433,8 +638,13 @@ class MainWindow(QMainWindow):
         self.apikey_edit.setEchoMode(QLineEdit.Password)
         self.apikey_edit.setPlaceholderText("cole a chave do provedor selecionado")
         self.provider_combo.currentIndexChanged.connect(self._on_provider_changed)
+        form.addRow("Provedor", self.provider_combo)
+        form.addRow("Modelo", self.model_edit)
+        form.addRow("Chave (API)", self.apikey_edit)
+        col.addWidget(card)
 
-        # --- Refinamento (2º atalho) ---
+        # --- Refinamento ---
+        card, form = _section("Refinamento (2º atalho)")
         self.refine_hotkey_btn = HotkeyCaptureButton(cfg.refine_hotkey)
         self.refiner_combo = QComboBox()
         for _rp in PROVIDERS:
@@ -448,54 +658,59 @@ class MainWindow(QMainWindow):
         self.refine_prompt_edit = QPlainTextEdit(
             cfg.refine_prompt or DEFAULT_REFINE_PROMPT
         )
-        self.refine_prompt_edit.setFixedHeight(90)
+        self.refine_prompt_edit.setFixedHeight(88)
         self.context_box = QCheckBox("Usar pasta de contexto no refinamento")
         self.context_box.setChecked(cfg.context_enabled)
         self.context_dir_edit = QLineEdit(cfg.context_dir)
         self.context_dir_edit.setPlaceholderText("pasta com .md/.txt de referência")
-        context_browse = QPushButton("Escolher pasta…")
+        context_browse = QPushButton()
+        context_browse.setObjectName("IconBtn")
+        context_browse.setIcon(icons.icon("folder", 18, "#9A93A6"))
+        context_browse.setFixedSize(32, 32)
+        context_browse.setCursor(Qt.PointingHandCursor)
+        context_browse.setToolTip("Escolher pasta")
         context_browse.clicked.connect(self._browse_context)
         context_row = QWidget()
         _crl = QHBoxLayout(context_row)
         _crl.setContentsMargins(0, 0, 0, 0)
+        _crl.setSpacing(8)
         _crl.addWidget(self.context_dir_edit)
         _crl.addWidget(context_browse)
+        form.addRow("Atalho", self.refine_hotkey_btn)
+        form.addRow("Provedor", self.refiner_combo)
+        form.addRow("Modelo", self.refiner_model_edit)
+        form.addRow("Prompt", self.refine_prompt_edit)
+        form.addRow("", self.context_box)
+        form.addRow("Pasta de contexto", context_row)
+        col.addWidget(card)
+
+        # --- Atualizações ---
+        card, form = _section("Atualizações")
         self.update_check_box = QCheckBox("Verificar atualizações ao iniciar")
         self.update_check_box.setChecked(cfg.check_updates_on_start)
-        check_now_btn = QPushButton("Verificar atualizações agora")
+        check_now_btn = QPushButton("Verificar agora")
+        check_now_btn.setCursor(Qt.PointingHandCursor)
         check_now_btn.clicked.connect(
             lambda: self.controller.check_updates(manual=True)
         )
-        save_btn = QPushButton("Salvar")
-        save_btn.setObjectName("Primary")
-        save_btn.clicked.connect(self._save_settings)
-
-        form.addRow("Atalho:", self.hotkey_btn)
-        form.addRow("Limiar toque/segurar:", self.threshold_spin)
-        form.addRow("Idioma:", self.language_edit)
-        form.addRow("Tema:", self.theme_combo)
-        form.addRow("Modo de saída:", self.output_combo)
-        form.addRow("", self.restore_check)
-        form.addRow("", self.ai_note_box)
-        form.addRow("Texto do aviso:", self.ai_note_edit)
-        form.addRow("Itens no histórico:", self.history_spin)
-        form.addRow("", self.autostart_check)
-        form.addRow("Provedor:", self.provider_combo)
-        form.addRow("Modelo:", self.model_edit)
-        form.addRow("Chave (API):", self.apikey_edit)
-        form.addRow("Atalho refino:", self.refine_hotkey_btn)
-        form.addRow("Refinador (provedor):", self.refiner_combo)
-        form.addRow("Refinador (modelo):", self.refiner_model_edit)
-        form.addRow("Prompt de refino:", self.refine_prompt_edit)
-        form.addRow("", self.context_box)
-        form.addRow("Pasta de contexto:", context_row)
         form.addRow("", self.update_check_box)
         form.addRow("", check_now_btn)
-        form.addRow(save_btn)
+        col.addWidget(card)
+
+        save_row = QHBoxLayout()
+        save_row.addStretch()
+        save_btn = QPushButton("Salvar alterações")
+        save_btn.setObjectName("Primary")
+        save_btn.setCursor(Qt.PointingHandCursor)
+        save_btn.clicked.connect(self._save_settings)
+        save_row.addWidget(save_btn)
+        col.addLayout(save_row)
+        col.addStretch()
+
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QScrollArea.NoFrame)
-        scroll.setWidget(w)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setWidget(page)
         return scroll
 
     def _on_provider_changed(self) -> None:
@@ -524,7 +739,7 @@ class MainWindow(QMainWindow):
             tap_threshold_ms=self.threshold_spin.value(),
             language=self.language_edit.text().strip() or "pt",
             theme_mode=self.theme_combo.currentData(),
-            output_mode=self.output_combo.currentText(),
+            output_mode=self.output_combo.currentData(),
             restore_clipboard=self.restore_check.isChecked(),
             history_size=self.history_spin.value(),
             autostart=self.autostart_check.isChecked(),
@@ -566,21 +781,19 @@ class MainWindow(QMainWindow):
             set_autostart(cfg.autostart)
         except Exception:  # noqa: BLE001
             pass
+        self._refresh_hint()
+        self.refresh_history()
         self.statusBar().showMessage("Configurações salvas.", 3000)
 
     def _on_state(self, state: str) -> None:
         labels = {
             "idle": "Pronto",
-            "recording": "🎙️ Gravando…",
-            "transcribing": "⏳ Transcrevendo…",
+            "recording": "Gravando…",
+            "transcribing": "Transcrevendo…",
         }
         self.statusBar().showMessage(labels.get(state, state))
         if hasattr(self, "record_btn"):
-            recording = state == "recording"
-            self.record_btn.setText("⏹" if recording else "🎙️")
-            self.record_btn.setProperty("recording", "true" if recording else "false")
-            self.record_btn.style().unpolish(self.record_btn)
-            self.record_btn.style().polish(self.record_btn)
+            self.record_btn.set_recording(state == "recording")
 
     def closeEvent(self, event):  # noqa: N802 — fecha para a bandeja
         event.ignore()
@@ -628,7 +841,7 @@ class TrayApp:
             self.show_window()
 
     def show_window(self) -> None:
-        self.window.show()
+        self.window.showNormal()
         self.window.raise_()
         self.window.activateWindow()
 
@@ -644,7 +857,7 @@ class TrayApp:
     def _on_file_busy(self, busy: bool) -> None:
         if busy:
             self.tray.setIcon(self.icons["transcribing"])
-            self.tray.setToolTip(f"{APP_NAME} — Transcrevendo arquivo…")
+            self.tray.setToolTip(f"{APP_NAME} — Transcrevendo…")
         else:
             self.tray.setIcon(self.icons["idle"])
             self.tray.setToolTip(f"{APP_NAME} — Pronto")

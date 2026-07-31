@@ -1,6 +1,6 @@
 import unittest
 
-from assistente_voz.hotkey import parse_hotkey
+from assistente_voz.hotkey import parse_hotkey, pretty_hotkey
 
 
 class TestParseHotkey(unittest.TestCase):
@@ -30,6 +30,17 @@ class TestParseHotkey(unittest.TestCase):
     def test_two_main_keys_raises(self):
         with self.assertRaises(ValueError):
             parse_hotkey("a+b")
+
+
+class TestPrettyHotkey(unittest.TestCase):
+    def test_pretty(self):
+        self.assertEqual(pretty_hotkey("ctrl+alt+space"), "Ctrl+Alt+Espaço")
+        self.assertEqual(pretty_hotkey("alt+q"), "Alt+Q")
+        self.assertEqual(pretty_hotkey("f8"), "F8")
+        self.assertEqual(pretty_hotkey("ctrl+shift+page_up"), "Ctrl+Shift+PgUp")
+
+    def test_empty(self):
+        self.assertEqual(pretty_hotkey(""), "")
 
 
 if __name__ == "__main__":

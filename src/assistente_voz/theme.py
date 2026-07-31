@@ -83,28 +83,82 @@ def apply_theme(app, mode: str) -> None:
         dark_os = app.styleHints().colorScheme() == Qt.ColorScheme.Dark
     except Exception:
         pass
-    app.setStyleSheet(build_qss(palette_for(mode, dark_os)))
+    pal = palette_for(mode, dark_os)
+    down = up = ""
+    try:
+        from .resources import chevron_png
+
+        down = chevron_png(pal.text_muted, up=False)
+        up = chevron_png(pal.text_muted, up=True)
+    except Exception:  # sem cache gravável: usa as setas padrão do Qt
+        pass
+    app.setStyleSheet(build_qss(pal, down, up))
 
 
-def build_qss(p: Palette) -> str:
-    """Folha de estilo (QSS) gerada a partir da paleta."""
+def build_qss(p: Palette, chevron_down: str = "", chevron_up: str = "") -> str:
+    """Folha de estilo (QSS) gerada a partir da paleta.
+
+    ``chevron_*`` são caminhos de PNG para as setas de QComboBox/QSpinBox; se
+    vazios, o Qt usa as setas padrão.
+    """
     grad = (
         f"qlineargradient(x1:0, y1:0, x2:1, y2:0, "
         f"stop:0 {p.grad_start}, stop:0.5 {p.grad_mid}, stop:1 {p.grad_end})"
     )
+    arrows = ""
+    if chevron_down:
+        arrows += (
+            f"QComboBox::down-arrow {{ image: url({chevron_down}); "
+            "width: 12px; height: 8px; }\n"
+            f"QSpinBox::down-arrow {{ image: url({chevron_down}); "
+            "width: 12px; height: 8px; }\n"
+        )
+    if chevron_up:
+        arrows += (
+            f"QSpinBox::up-arrow {{ image: url({chevron_up}); "
+            "width: 12px; height: 8px; }\n"
+        )
     return f"""
     * {{ outline: none; }}
     QWidget {{ background-color: {p.bg}; color: {p.text}; font-size: 13px; }}
     QMainWindow, QDialog {{ background-color: {p.bg}; }}
 
     #Header {{ background-color: {p.surface}; border-bottom: 1px solid {p.border}; }}
-    #HeaderTitle {{ font-size: 17px; font-weight: 600; color: {p.text}; }}
+    #HeaderTitle {{ font-size: 16px; font-weight: 500; color: {p.text}; }}
+    #Hero {{ background-color: {p.surface}; border-bottom: 1px solid {p.border}; }}
     QLabel#Muted {{ color: {p.text_muted}; }}
+    #SectionTitle {{ font-size: 13px; font-weight: 500; color: {p.text}; }}
+
+    #Card {{ background-color: {p.surface}; border: 1px solid {p.border};
+        border-radius: 12px; }}
+    #Card QLabel {{ background: transparent; }}
+
+    QPushButton#Chip {{ background-color: {p.surface_alt}; color: {p.text};
+        border: 1px solid {p.border}; border-radius: 10px; padding: 8px 14px;
+        font-size: 12px; text-align: left; }}
+    QPushButton#Chip:hover {{ border-color: {p.accent}; }}
+    QPushButton#Chip:disabled {{ color: {p.text_muted}; background-color: transparent; }}
+
+    QPushButton#IconBtn {{ background: transparent; border: 1px solid transparent;
+        border-radius: 8px; padding: 0; }}
+    QPushButton#IconBtn:hover {{ background-color: {p.surface_alt};
+        border-color: {p.border}; }}
+
+    #HistoryList {{ background: transparent; border: none; }}
+    #HistoryList::item {{ background: transparent; border: none; padding: 0; }}
+    #HistoryCard {{ background-color: {p.surface}; border: 1px solid {p.border};
+        border-radius: 10px; }}
+    #HistoryCard:hover {{ border-color: {p.accent}; }}
+    #TimePill {{ color: {p.text_muted}; background-color: {p.surface_alt};
+        border-radius: 6px; padding: 3px 7px; font-size: 11px; }}
+    #CardText {{ color: {p.text}; font-size: 12px; }}
 
     QTabWidget::pane {{ border: none; background: {p.bg}; }}
+    QTabWidget::tab-bar {{ alignment: center; }}
+    QTabBar {{ background: transparent; }}
     QTabBar::tab {{ background: transparent; color: {p.text_muted};
-        padding: 8px 18px; border: none; border-bottom: 2px solid transparent; }}
-    QTabBar::tab:selected {{ color: {p.text}; border-bottom: 2px solid {p.accent}; }}
+        padding: 8px 22px; border: none; border-radius: 9px; margin: 8px 3px 4px 3px; }}
+    QTabBar::tab:selected {{ color: {p.text}; background-color: {p.surface}; }}
     QTabBar::tab:hover {{ color: {p.text}; }}
 
     QPushButton {{ background-color: {p.surface}; color: {p.text};
@@ -116,21 +170,9 @@ def build_qss(p: Palette) -> str:
         padding: 10px 18px; min-height: 18px; font-weight: 500;
         background-color: {grad}; }}
     QPushButton#Primary:hover {{ background-color: {p.accent_hover}; }}
-    QPushButton#Record {{ border: none; color: #FFFFFF; border-radius: 9px;
-        padding: 10px 18px; min-height: 18px; font-weight: 500;
-        background-color: {grad}; }}
-    QPushButton#Record:hover {{ background-color: {p.accent_hover}; }}
-    QPushButton#Record[recording="true"] {{ background-color: {p.danger}; }}
-    QPushButton#Record[recording="true"]:hover {{ background-color: {p.danger}; }}
-
-    #Hero {{ background: transparent; }}
     #VersionPill {{ color: {p.text_muted}; background: {p.surface_alt};
         border: 1px solid {p.border}; border-radius: 11px; padding: 3px 10px;
         font-size: 11px; }}
-    QPushButton#RecordBig {{ border: none; border-radius: 38px; color: #FFFFFF;
-        font-size: 30px; background-color: {grad}; }}
-    QPushButton#RecordBig:hover {{ background-color: {p.accent_hover}; }}
-    QPushButton#RecordBig[recording="true"] {{ background-color: {p.danger}; }}
 
     QLineEdit, QPlainTextEdit, QSpinBox, QComboBox {{
         background-color: {p.surface}; color: {p.text};
@@ -138,6 +180,14 @@ def build_qss(p: Palette) -> str:
         selection-background-color: {p.accent}; selection-color: {p.accent_text}; }}
     QLineEdit:focus, QPlainTextEdit:focus, QSpinBox:focus, QComboBox:focus {{
         border-color: {p.accent}; }}
+    QComboBox::drop-down {{ border: none; background: transparent; width: 24px;
+        subcontrol-origin: padding; subcontrol-position: center right; }}
+    {arrows}
+    QComboBox QAbstractItemView {{ background-color: {p.surface};
+        border: 1px solid {p.border}; border-radius: 8px; padding: 4px;
+        selection-background-color: {p.accent}; selection-color: {p.accent_text}; }}
+    QSpinBox::up-button, QSpinBox::down-button {{ background: transparent;
+        border: none; width: 16px; margin-right: 4px; }}
 
     QListWidget {{ background-color: {p.surface}; color: {p.text};
         border: 1px solid {p.border}; border-radius: 10px; padding: 4px; }}

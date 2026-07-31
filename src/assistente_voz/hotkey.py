@@ -27,6 +27,19 @@ def parse_hotkey(spec: str) -> tuple[frozenset[str], str]:
     return mods, main[0]
 
 
+_PRETTY = {
+    "ctrl": "Ctrl", "alt": "Alt", "shift": "Shift", "cmd": "Win",
+    "space": "Espaço", "pause": "Pause", "insert": "Insert", "home": "Home",
+    "end": "End", "page_up": "PgUp", "page_down": "PgDn",
+}
+
+
+def pretty_hotkey(spec: str) -> str:
+    """'ctrl+alt+space' -> 'Ctrl+Alt+Espaço' (só para exibição)."""
+    parts = [p.strip().lower() for p in spec.split("+") if p.strip()]
+    return "+".join(_PRETTY.get(p, p.upper()) for p in parts)
+
+
 class HotkeyListener:
     """Emite ``on_start()`` quando a combinação fica totalmente pressionada e
     ``on_release(duration_ms)`` quando é solta. A decisão toque-vs-segurar é do

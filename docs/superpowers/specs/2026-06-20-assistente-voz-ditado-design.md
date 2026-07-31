@@ -322,3 +322,8 @@ principalmente **mensagens de voz do WhatsApp**.
   reagindo ao nível do microfone) → processando (barra animada) → "Colado ✓"
   (some sozinho). Dirigido por `Controller.overlayState`; o nível vem de
   `Recorder.level` (RMS por `array`, sem numpy) via `Controller.current_level`.
+- **Ícones** (`icons.py`): desenhados com QPainter (nada de emoji — renderiza mal
+  no Windows). O botão de gravar é pintado à mão (`RecordButton`), pois o
+  `min-height` do QSS global sobrepõe `setFixedSize`.
+- **Conferência visual:** `tools/render_ui.py` renderiza a interface em PNG em
+  modo headless (`QT_QPA_PLATFORM=offscreen`), sem precisar abrir o app.

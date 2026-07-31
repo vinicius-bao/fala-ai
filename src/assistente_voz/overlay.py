@@ -6,8 +6,8 @@ concluído ("Colado ✓"), sumindo em seguida. Não rouba o foco de quem digita.
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, QTime, QTimer
-from PySide6.QtGui import QColor, QPainter
+from PySide6.QtCore import QRectF, Qt, QTime, QTimer
+from PySide6.QtGui import QColor, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
     QFrame,
@@ -20,6 +20,24 @@ from PySide6.QtWidgets import (
 )
 
 _GRAD = ((0xBD, 0x61, 0x9D), (0xB4, 0x8B, 0xB9), (0xFB, 0xB0, 0x3B))
+
+
+def _badge(icon_name: str, color: str, size: int = 26) -> QPixmap:
+    """Círculo colorido com um ícone branco no meio."""
+    from . import icons
+
+    pm = QPixmap(size, size)
+    pm.fill(Qt.transparent)
+    p = QPainter(pm)
+    p.setRenderHint(QPainter.Antialiasing)
+    p.setPen(Qt.NoPen)
+    p.setBrush(QColor(color))
+    p.drawEllipse(QRectF(0, 0, size, size))
+    glyph = size * 0.62
+    p.translate((size - glyph) / 2, (size - glyph) / 2)
+    icons.draw(icon_name, p, glyph, QColor("#FFFFFF"))
+    p.end()
+    return pm
 
 
 def _grad_color(t: float) -> QColor:
@@ -36,18 +54,23 @@ def _grad_color(t: float) -> QColor:
 
 
 class _WaveBars(QWidget):
-    def __init__(self, n: int = 15, parent=None):
+    def __init__(self, n: int = 17, parent=None):
         super().__init__(parent)
         self._n = n
-        self._levels = [0.05] * n
-        self.setFixedSize(n * 7, 28)
+        self._levels = self._idle()
+        self.setFixedSize(n * 8, 30)
+
+    def _idle(self) -> list[float]:
+        import math
+
+        return [0.12 + 0.06 * math.sin(i * 0.9) for i in range(self._n)]
 
     def push(self, level: float) -> None:
-        self._levels = self._levels[1:] + [max(0.05, min(1.0, level))]
+        self._levels = self._levels[1:] + [max(0.10, min(1.0, level))]
         self.update()
 
     def reset(self) -> None:
-        self._levels = [0.05] * self._n
+        self._levels = self._idle()
         self.update()
 
     def paintEvent(self, event):  # noqa: N802
@@ -55,7 +78,7 @@ class _WaveBars(QWidget):
         p.setRenderHint(QPainter.Antialiasing)
         p.setPen(Qt.NoPen)
         w = self.width() / self._n
-        barw = w * 0.5
+        barw = w * 0.42
         height = self.height()
         for i, lv in enumerate(self._levels):
             h = max(3.0, lv * height)
@@ -136,7 +159,7 @@ class RecordingOverlay(QWidget):
         self._wave.show()
         self._wave.reset()
         self._bar.hide()
-        self._set_dot("#E5484D")
+        self._set_dot("mic", "#E5484D")
         self._t0 = QTime.currentTime()
         self._label.setText("Ouvindo…  0:00")
         self._wave_timer.start()
@@ -149,7 +172,7 @@ class RecordingOverlay(QWidget):
         self._wave.hide()
         self._bar.show()
         self._bar.setRange(0, 0)
-        self._set_dot("#FBB03B")
+        self._set_dot("sparkle", "#FBB03B")
         self._label.setText(text)
         self._show_at_bottom()
 
@@ -158,7 +181,7 @@ class RecordingOverlay(QWidget):
         self._elapsed_timer.stop()
         self._wave.hide()
         self._bar.hide()
-        self._set_dot("#30A46C")
+        self._set_dot("check", "#30A46C")
         self._label.setText(text)
         self._show_at_bottom()
         self._hide_timer.start(1500)
@@ -170,8 +193,8 @@ class RecordingOverlay(QWidget):
         self.hide()
 
     # ---- internos ----
-    def _set_dot(self, color: str) -> None:
-        self._dot.setStyleSheet(f"background:{color};border-radius:11px;")
+    def _set_dot(self, icon_name: str, color: str) -> None:
+        self._dot.setPixmap(_badge(icon_name, color, 24))
 
     def _show_at_bottom(self) -> None:
         self.adjustSize()

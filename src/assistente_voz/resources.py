@@ -76,6 +76,33 @@ def _generated_pixmap(size: int):
     return pm
 
 
+def chevron_png(color: str, up: bool = False) -> str:
+    """Gera (e cacheia) uma seta em PNG para usar no QSS. Devolve o caminho."""
+    from PySide6.QtCore import QPointF, Qt
+    from PySide6.QtGui import QColor, QPainter, QPen, QPixmap
+
+    from .config import config_dir
+
+    cache = config_dir() / "cache"
+    cache.mkdir(parents=True, exist_ok=True)
+    out = cache / f"chevron_{'up' if up else 'down'}_{color.lstrip('#')}.png"
+    if not out.exists():
+        w, h = 12, 8
+        pm = QPixmap(w, h)
+        pm.fill(Qt.transparent)
+        p = QPainter(pm)
+        p.setRenderHint(QPainter.Antialiasing)
+        p.setPen(QPen(QColor(color), 1.6, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+        if up:
+            pts = [QPointF(2.5, 5.5), QPointF(6, 2.5), QPointF(9.5, 5.5)]
+        else:
+            pts = [QPointF(2.5, 2.5), QPointF(6, 5.5), QPointF(9.5, 2.5)]
+        p.drawPolyline(pts)
+        p.end()
+        pm.save(str(out), "PNG")
+    return out.as_posix()
+
+
 def app_icon():
     from PySide6.QtGui import QIcon
 
