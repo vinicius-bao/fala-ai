@@ -23,6 +23,15 @@ def main() -> int:
         except Exception:
             pass
 
+    import logging
+
+    from .logs import setup_logging
+
+    setup_logging()
+    from . import __version__
+
+    logging.getLogger("falaai").info("Fala AI %s iniciando", __version__)
+
     from dotenv import load_dotenv
 
     load_dotenv()  # carrega GROQ_API_KEY do .env, se existir

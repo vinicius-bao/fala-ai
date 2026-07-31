@@ -3,10 +3,25 @@
 from __future__ import annotations
 
 import json
+import unicodedata
 import uuid
 from dataclasses import asdict, dataclass, fields
 from datetime import datetime
 from pathlib import Path
+
+
+def normalize_search(text: str) -> str:
+    """Minúsculas e sem acentos, para a busca não depender de acentuação."""
+    decomposed = unicodedata.normalize("NFD", text or "")
+    return "".join(c for c in decomposed if not unicodedata.combining(c)).casefold()
+
+
+def matches(text: str, query: str) -> bool:
+    query = normalize_search(query).strip()
+    if not query:
+        return True
+    haystack = normalize_search(text)
+    return all(word in haystack for word in query.split())
 
 
 @dataclass
@@ -78,6 +93,19 @@ class History:
         entry.original = original
         self.persist()
         return True
+
+    def remove(self, uid: str) -> bool:
+        before = len(self._items)
+        self._items = [i for i in self._items if i.uid != uid]
+        if len(self._items) != before:
+            self.persist()
+            return True
+        return False
+
+    def search(self, query: str, n: int = 50) -> list[Transcription]:
+        """Itens que combinam com a busca, mais recentes primeiro."""
+        found = [i for i in reversed(self._items) if matches(i.text, query)]
+        return found[:n]
 
     def clear(self) -> None:
         self._items = []

@@ -197,7 +197,7 @@ def _section(title: str) -> tuple[QFrame, QFormLayout]:
 class HistoryCard(QFrame):
     """Item do histórico: hora, texto e botão de copiar."""
 
-    def __init__(self, entry, on_copy, on_refine, parent=None):
+    def __init__(self, entry, on_copy, on_refine, on_delete, parent=None):
         super().__init__(parent)
         self.setObjectName("HistoryCard")
         self.setMinimumHeight(50)
@@ -247,6 +247,15 @@ class HistoryCard(QFrame):
         copy_btn.setToolTip("Copiar")
         copy_btn.clicked.connect(lambda: on_copy(entry.text))
         lay.addWidget(copy_btn)
+
+        del_btn = QPushButton()
+        del_btn.setObjectName("IconBtn")
+        del_btn.setCursor(Qt.PointingHandCursor)
+        del_btn.setIcon(icons.icon("trash", 18, "#9A93A6"))
+        del_btn.setFixedSize(30, 30)
+        del_btn.setToolTip("Apagar este item")
+        del_btn.clicked.connect(lambda: on_delete(entry.uid))
+        lay.addWidget(del_btn)
 
     def set_busy(self, busy: bool) -> None:
         self._refine_btn.setEnabled(not busy)
@@ -619,8 +628,11 @@ class MainWindow(QMainWindow):
         lay.setSpacing(10)
 
         top = QHBoxLayout()
-        hint = QLabel("Arraste um áudio aqui para transcrever")
-        hint.setObjectName("Muted")
+        self.search_edit = QLineEdit()
+        self.search_edit.setPlaceholderText("Buscar no histórico…")
+        self.search_edit.setClearButtonEnabled(True)
+        self.search_edit.textChanged.connect(lambda _: self.refresh_history())
+        hint = self.search_edit
         clear_btn = QPushButton()
         clear_btn.setObjectName("IconBtn")
         clear_btn.setIcon(icons.icon("trash", 18, "#9A93A6"))
@@ -628,10 +640,13 @@ class MainWindow(QMainWindow):
         clear_btn.setCursor(Qt.PointingHandCursor)
         clear_btn.setToolTip("Limpar histórico")
         clear_btn.clicked.connect(self._clear_history)
-        top.addWidget(hint)
-        top.addStretch()
+        top.addWidget(hint, 1)
         top.addWidget(clear_btn)
         lay.addLayout(top)
+
+        self.drop_hint = QLabel("Arraste um áudio aqui para transcrever")
+        self.drop_hint.setObjectName("Muted")
+        lay.addWidget(self.drop_hint)
 
         # Faixa que aparece só quando algum áudio ficou para reenviar.
         self.pending_bar = QFrame()
@@ -672,12 +687,25 @@ class MainWindow(QMainWindow):
 
     def refresh_history(self) -> None:
         self.history_list.clear()
-        entries = self.controller.history.recent(self.controller.config.history_size)
+        size = self.controller.config.history_size
+        query = self.search_edit.text() if hasattr(self, "search_edit") else ""
+        entries = (
+            self.controller.history.search(query, size)
+            if query.strip()
+            else self.controller.history.recent(size)
+        )
         self.empty_label.setVisible(not entries)
+        self.empty_label.setText(
+            "Nada encontrado para essa busca."
+            if query.strip()
+            else "Nada por aqui ainda — grave algo para começar."
+        )
         self.history_list.setVisible(bool(entries))
         self._cards = {}
         for entry in entries:
-            card = HistoryCard(entry, self._copy_text, self._refine_entry)
+            card = HistoryCard(
+                entry, self._copy_text, self._refine_entry, self._delete_entry
+            )
             self._cards[entry.uid] = card
             item = QListWidgetItem()
             # Largura 1: a lista estica o item até a área visível sozinha.
@@ -704,6 +732,11 @@ class MainWindow(QMainWindow):
         ):
             self.controller.discard_pending()
             self._update_pending()
+
+    def _delete_entry(self, uid: str) -> None:
+        if self.controller.history.remove(uid):
+            self.refresh_history()
+            self.statusBar().showMessage("Item apagado.", 2000)
 
     def _refine_entry(self, uid: str) -> None:
         self.statusBar().showMessage("Refinando o texto…", 0)
@@ -756,10 +789,13 @@ class MainWindow(QMainWindow):
                                       cfg.input_device)
             _di = self.device_combo.count() - 1
         self.device_combo.setCurrentIndex(max(0, _di))
+        self.sound_check = QCheckBox("Tocar um bipe ao iniciar e parar a gravação")
+        self.sound_check.setChecked(cfg.sound_enabled)
         form.addRow("Atalho", self.hotkey_btn)
         form.addRow("Microfone", self.device_combo)
         form.addRow("Limiar toque/segurar", self.threshold_spin)
         form.addRow("Idioma", self.language_edit)
+        form.addRow("", self.sound_check)
         col.addWidget(card)
 
         # --- Aparência ---
@@ -905,7 +941,14 @@ class MainWindow(QMainWindow):
         help_btn = QPushButton("Ver primeiros passos")
         help_btn.setCursor(Qt.PointingHandCursor)
         help_btn.clicked.connect(lambda: self.show_welcome())
+        logs_btn = QPushButton("Abrir pasta de logs")
+        logs_btn.setCursor(Qt.PointingHandCursor)
+        logs_btn.setToolTip(
+            "Registros de erro do app — úteis para diagnosticar problemas."
+        )
+        logs_btn.clicked.connect(self._open_logs)
         form.addRow("", help_btn)
+        form.addRow("", logs_btn)
         col.addWidget(card)
 
         note = QLabel("As alterações são salvas automaticamente.")
@@ -954,6 +997,7 @@ class MainWindow(QMainWindow):
             w.currentIndexChanged.connect(self._queue_save)
         for w in (
             self.restore_check,
+            self.sound_check,
             self.ai_note_box,
             self.autostart_check,
             self.context_box,
@@ -992,6 +1036,12 @@ class MainWindow(QMainWindow):
         p = self.refiner_combo.currentData()
         self.refiner_model_edit.setText(DEFAULT_CHAT_MODELS.get(p, ""))
 
+    def _open_logs(self) -> None:
+        from .logs import open_log_folder
+
+        open_log_folder()
+        self.statusBar().showMessage("Abri a pasta de logs.", 3000)
+
     def _browse_context(self) -> None:
         folder = QFileDialog.getExistingDirectory(self, "Escolher pasta de contexto")
         if folder:
@@ -1006,6 +1056,7 @@ class MainWindow(QMainWindow):
             language=self.language_edit.text().strip() or "pt",
             input_device=self.device_combo.currentData() or "",
             theme_mode=self.theme_combo.currentData(),
+            sound_enabled=self.sound_check.isChecked(),
             output_mode=self.output_combo.currentData(),
             restore_clipboard=self.restore_check.isChecked(),
             history_size=self.history_spin.value(),

@@ -103,6 +103,7 @@ class Config:
     language: str = "pt"
     input_device: str = ""             # nome do microfone; "" = padrão do sistema
     theme_mode: str = "auto"           # "auto" | "light" | "dark"
+    sound_enabled: bool = True         # bipe ao iniciar/parar a gravação
     output_mode: str = "paste"          # "paste" | "clipboard_only"
     restore_clipboard: bool = False     # restaurar clipboard anterior após colar
     history_size: int = 50

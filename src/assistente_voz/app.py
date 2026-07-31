@@ -7,6 +7,7 @@ separada para não travar a interface.
 
 from __future__ import annotations
 
+import logging
 import os
 import threading
 import time
@@ -28,6 +29,8 @@ from .hotkey import HotkeyListener
 from .output import TextOutput
 from .refiner import make_refiner
 from .transcription import make_engine
+
+log = logging.getLogger(__name__)
 
 
 class Controller(QObject):
@@ -244,15 +247,24 @@ class Controller(QObject):
         try:
             self._recorder.start()
         except Exception as e:  # noqa: BLE001
+            log.exception("Falha ao abrir o microfone")
             self.failed.emit(f"Não consegui acessar o microfone: {e}")
             self._activation.reset()
             self.overlayState.emit("hidden", "")
             return
+        if self.config.sound_enabled:
+            from .sounds import play_start
+
+            play_start()
         self.overlayState.emit("recording", "")
 
     def _stop_and_transcribe(self) -> None:
         wav = self._recorder.stop()
         duration = self._recorder.last_duration_s
+        if self.config.sound_enabled:
+            from .sounds import play_stop
+
+            play_stop()
         if duration < 0.3 or not wav:  # silêncio / clique acidental
             self._activation.on_transcription_done()
             self.overlayState.emit("hidden", "")
@@ -279,6 +291,7 @@ class Controller(QObject):
             )
             self._transcriptionReady.emit(text, duration)
         except Exception as e:  # noqa: BLE001
+            log.exception("Falha na transcrição")
             self._transcriptionFailed.emit(str(e), wav)
 
     def _on_ready(self, text: str, duration: float) -> None:
@@ -326,6 +339,7 @@ class Controller(QObject):
             ).strip()
             self._refineReady.emit(refined or text, duration)
         except Exception as e:  # noqa: BLE001
+            log.exception("Falha no refino")
             self._refineFailed.emit(str(e), text, duration)
 
     def _on_refine_ready(self, text: str, duration: float) -> None:
@@ -361,6 +375,7 @@ class Controller(QObject):
             ).strip()
             self._itemRefineReady.emit(uid, refined or text)
         except Exception as e:  # noqa: BLE001
+            log.exception("Falha ao refinar item do histórico")
             self._itemRefineFailed.emit(uid, str(e))
 
     def _on_item_refine_ready(self, uid: str, text: str) -> None:
@@ -448,6 +463,7 @@ class Controller(QObject):
             )
             self._fileReady.emit(text, name)
         except Exception as e:  # noqa: BLE001
+            log.exception("Falha ao transcrever arquivo")
             self._fileFailed.emit(str(e))
 
     def _on_file_ready(self, text: str, name: str) -> None:
@@ -498,6 +514,7 @@ class Controller(QObject):
         try:
             self._updateDone.emit(fetch_latest_release(repo))
         except Exception as e:  # noqa: BLE001
+            log.warning("Falha ao verificar atualização: %s", e)
             self._updateFail.emit(str(e))
 
     def _on_update_done(self, rel) -> None:
