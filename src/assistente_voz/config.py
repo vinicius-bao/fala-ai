@@ -22,6 +22,24 @@ DEFAULT_UPDATE_REPO = "vinicius-bao/fala-ai"
 # Rótulo acrescentado ao final de toda transcrição.
 AI_NOTE = "transcrito por IA (pode ocorrer alguma divergência na fala)"
 
+# Provedores de transcrição disponíveis.
+PROVIDERS = ("groq", "openai", "gemini")
+PROVIDER_LABELS = {
+    "groq": "Groq (Whisper)",
+    "openai": "OpenAI",
+    "gemini": "Google Gemini",
+}
+DEFAULT_MODELS = {
+    "groq": "whisper-large-v3",
+    "openai": "gpt-4o-transcribe",
+    "gemini": "gemini-2.0-flash",
+}
+_PROVIDER_ENV = {
+    "groq": ("GROQ_API_KEY",),
+    "openai": ("OPENAI_API_KEY",),
+    "gemini": ("GEMINI_API_KEY", "GOOGLE_API_KEY"),
+}
+
 
 @dataclass
 class Config:
@@ -33,8 +51,13 @@ class Config:
     restore_clipboard: bool = False     # restaurar clipboard anterior após colar
     history_size: int = 50
     autostart: bool = False
+    provider: str = "groq"             # "groq" | "openai" | "gemini"
     groq_model: str = "whisper-large-v3"
     groq_api_key: str = ""              # vazio => usa GROQ_API_KEY do ambiente
+    openai_model: str = "gpt-4o-transcribe"
+    openai_api_key: str = ""           # vazio => usa OPENAI_API_KEY do ambiente
+    gemini_model: str = "gemini-2.0-flash"
+    gemini_api_key: str = ""           # vazio => usa GEMINI_API_KEY do ambiente
     update_repo: str = ""              # ex.: "usuario/fala-ai" (GitHub Releases)
     check_updates_on_start: bool = True
     ai_note_enabled: bool = False     # acrescentar o rótulo de IA às transcrições
@@ -82,6 +105,32 @@ def save_config(cfg: Config, path: Path | None = None) -> None:
 def resolve_api_key(cfg: Config) -> str:
     """Resolve a chave da Groq: ambiente primeiro, depois config."""
     return os.environ.get("GROQ_API_KEY", "").strip() or cfg.groq_api_key.strip()
+
+
+def provider_key_field(cfg: Config, provider: str) -> str:
+    return {
+        "groq": cfg.groq_api_key,
+        "openai": cfg.openai_api_key,
+        "gemini": cfg.gemini_api_key,
+    }.get(provider, "")
+
+
+def provider_model(cfg: Config, provider: str) -> str:
+    model = {
+        "groq": cfg.groq_model,
+        "openai": cfg.openai_model,
+        "gemini": cfg.gemini_model,
+    }.get(provider, "")
+    return model.strip() or DEFAULT_MODELS.get(provider, "")
+
+
+def resolve_provider_key(cfg: Config, provider: str) -> str:
+    """Chave do provedor: variável de ambiente primeiro, depois a do config."""
+    for env in _PROVIDER_ENV.get(provider, ()):
+        value = os.environ.get(env, "").strip()
+        if value:
+            return value
+    return provider_key_field(cfg, provider).strip()
 
 
 def resolve_update_repo(cfg: Config) -> str:

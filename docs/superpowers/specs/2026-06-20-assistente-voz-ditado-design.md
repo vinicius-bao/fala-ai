@@ -288,3 +288,15 @@ principalmente **mensagens de voz do WhatsApp**.
   (texto personalizável; padrão em `AI_NOTE`). Quando ligado, o rótulo é
   acrescentado ao final de toda transcrição (ditado e arquivo), via
   `append_note` (puro, testado). Desligado por padrão.
+
+## 21. Adendo — Tema, botão de gravar e múltiplos provedores
+
+- **Tema:** `theme_mode` (auto/light/dark) + seletor; `theme.apply_theme` aplica
+  e reage à mudança do SO. **Gravar por botão:** `Activation.toggle_button` +
+  `Controller.toggle_recording` (botão na tela inicial, vermelho ao gravar).
+- **Provedores de transcrição:** Groq (Whisper), OpenAI (gpt-4o-transcribe) e
+  Google Gemini (gemini-2.0-flash). Seletor em Configurações; modelo e chave por
+  provedor aparecem abaixo (chave guardada localmente, por provedor).
+  `TranscriptionEngine` + `make_engine(provider, key, model)` — Groq/OpenAI via
+  SDK, Gemini via REST (urllib). Config: `provider`, `{groq,openai,gemini}_model`
+  e `_api_key`; helpers `resolve_provider_key` e `provider_model`.

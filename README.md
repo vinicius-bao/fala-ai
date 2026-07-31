@@ -37,9 +37,16 @@ Escolha **uma** das opções:
 
 2. **Variável de ambiente** `GROQ_API_KEY` no Windows.
 
-3. Pela **interface**: aba *Configurações* → campo *Chave Groq* → *Salvar*.
+3. Pela **interface**: aba *Configurações* → *Provedor* → *Chave (API)* → *Salvar*.
 
 A ordem de prioridade é: variável de ambiente → `.env` → valor salvo na interface.
+
+### Outros provedores de transcrição
+
+Além do Groq, dá para escolher **OpenAI** (`gpt-4o-transcribe`) ou **Google
+Gemini** (`gemini-2.0-flash`) na aba *Configurações* → *Provedor*. Cada provedor
+tem sua própria chave (guardada localmente). Variáveis de ambiente aceitas:
+`OPENAI_API_KEY` e `GEMINI_API_KEY` (ou `GOOGLE_API_KEY`).
 
 ## Executar
 

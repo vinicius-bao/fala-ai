@@ -30,7 +30,14 @@ from PySide6.QtWidgets import (
 
 from .app import Controller
 from .audiofile import SUPPORTED_EXTS, is_supported
-from .config import AI_NOTE, Config, save_config
+from .config import (
+    AI_NOTE,
+    DEFAULT_MODELS,
+    PROVIDER_LABELS,
+    PROVIDERS,
+    Config,
+    save_config,
+)
 from .hotkey import parse_hotkey
 from .resources import app_icon, logo_pixmap, tray_icon
 
@@ -374,10 +381,29 @@ class MainWindow(QMainWindow):
         self.history_spin.setValue(cfg.history_size)
         self.autostart_check = QCheckBox("Iniciar com o Windows")
         self.autostart_check.setChecked(cfg.autostart)
-        self.model_edit = QLineEdit(cfg.groq_model)
-        self.apikey_edit = QLineEdit(cfg.groq_api_key)
+        self._prov_keys = {
+            "groq": cfg.groq_api_key,
+            "openai": cfg.openai_api_key,
+            "gemini": cfg.gemini_api_key,
+        }
+        self._prov_models = {
+            "groq": cfg.groq_model,
+            "openai": cfg.openai_model,
+            "gemini": cfg.gemini_model,
+        }
+        self._cur_provider = cfg.provider if cfg.provider in PROVIDERS else "groq"
+        self.provider_combo = QComboBox()
+        for _p in PROVIDERS:
+            self.provider_combo.addItem(PROVIDER_LABELS[_p], _p)
+        _pi = self.provider_combo.findData(self._cur_provider)
+        self.provider_combo.setCurrentIndex(_pi if _pi >= 0 else 0)
+        self.model_edit = QLineEdit(
+            self._prov_models[self._cur_provider] or DEFAULT_MODELS[self._cur_provider]
+        )
+        self.apikey_edit = QLineEdit(self._prov_keys[self._cur_provider])
         self.apikey_edit.setEchoMode(QLineEdit.Password)
-        self.apikey_edit.setPlaceholderText("vazio = usa GROQ_API_KEY do ambiente")
+        self.apikey_edit.setPlaceholderText("cole a chave do provedor selecionado")
+        self.provider_combo.currentIndexChanged.connect(self._on_provider_changed)
         self.update_check_box = QCheckBox("Verificar atualizações ao iniciar")
         self.update_check_box.setChecked(cfg.check_updates_on_start)
         check_now_btn = QPushButton("Verificar atualizações agora")
@@ -398,14 +424,26 @@ class MainWindow(QMainWindow):
         form.addRow("Texto do aviso:", self.ai_note_edit)
         form.addRow("Itens no histórico:", self.history_spin)
         form.addRow("", self.autostart_check)
-        form.addRow("Modelo Groq:", self.model_edit)
-        form.addRow("Chave Groq:", self.apikey_edit)
+        form.addRow("Provedor:", self.provider_combo)
+        form.addRow("Modelo:", self.model_edit)
+        form.addRow("Chave (API):", self.apikey_edit)
         form.addRow("", self.update_check_box)
         form.addRow("", check_now_btn)
         form.addRow(save_btn)
         return w
 
+    def _on_provider_changed(self) -> None:
+        # guarda o que está nos campos para o provedor anterior
+        self._prov_keys[self._cur_provider] = self.apikey_edit.text().strip()
+        self._prov_models[self._cur_provider] = self.model_edit.text().strip()
+        p = self.provider_combo.currentData()
+        self._cur_provider = p
+        self.model_edit.setText(self._prov_models.get(p) or DEFAULT_MODELS[p])
+        self.apikey_edit.setText(self._prov_keys.get(p, ""))
+
     def _save_settings(self) -> None:
+        self._prov_keys[self._cur_provider] = self.apikey_edit.text().strip()
+        self._prov_models[self._cur_provider] = self.model_edit.text().strip()
         cfg = Config(
             hotkey=self.hotkey_btn.value(),
             tap_threshold_ms=self.threshold_spin.value(),
@@ -415,8 +453,13 @@ class MainWindow(QMainWindow):
             restore_clipboard=self.restore_check.isChecked(),
             history_size=self.history_spin.value(),
             autostart=self.autostart_check.isChecked(),
-            groq_model=self.model_edit.text().strip() or "whisper-large-v3",
-            groq_api_key=self.apikey_edit.text().strip(),
+            provider=self.provider_combo.currentData(),
+            groq_model=self._prov_models["groq"] or DEFAULT_MODELS["groq"],
+            groq_api_key=self._prov_keys["groq"],
+            openai_model=self._prov_models["openai"] or DEFAULT_MODELS["openai"],
+            openai_api_key=self._prov_keys["openai"],
+            gemini_model=self._prov_models["gemini"] or DEFAULT_MODELS["gemini"],
+            gemini_api_key=self._prov_keys["gemini"],
             check_updates_on_start=self.update_check_box.isChecked(),
             ai_note_enabled=self.ai_note_box.isChecked(),
             ai_note_text=self.ai_note_edit.text().strip() or AI_NOTE,

@@ -11,7 +11,7 @@ import os
 from PyInstaller.utils.hooks import collect_all, collect_submodules
 
 datas, binaries, hiddenimports = [], [], []
-for pkg in ("groq", "sounddevice", "pynput", "pyperclip", "platformdirs", "dotenv", "certifi"):
+for pkg in ("groq", "openai", "sounddevice", "pynput", "pyperclip", "platformdirs", "dotenv", "certifi"):
     d, b, h = collect_all(pkg)
     datas += d
     binaries += b

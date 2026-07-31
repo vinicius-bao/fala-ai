@@ -14,11 +14,17 @@ from PySide6.QtCore import QObject, Qt, Signal
 
 from .activation import Action, Activation, State
 from .audio import Recorder
-from .config import Config, append_note, config_dir, resolve_api_key
+from .config import (
+    Config,
+    append_note,
+    config_dir,
+    provider_model,
+    resolve_provider_key,
+)
 from .history import History, Transcription
 from .hotkey import HotkeyListener
 from .output import TextOutput
-from .transcription import GroqEngine
+from .transcription import make_engine
 
 
 class Controller(QObject):
@@ -53,7 +59,7 @@ class Controller(QObject):
         self._activation = Activation(config.tap_threshold_ms)
         self._recorder = Recorder()
         self._output = TextOutput()
-        self._engine: GroqEngine | None = None
+        self._engine = None
         self._hotkey: HotkeyListener | None = None
 
         self._hkStart.connect(self._on_start, Qt.QueuedConnection)
@@ -91,8 +97,7 @@ class Controller(QObject):
         self.config = new
         self._activation.tap_threshold_ms = new.tap_threshold_ms
         self.history.max_size = new.history_size
-        if (new.groq_api_key, new.groq_model) != (old.groq_api_key, old.groq_model):
-            self._rebuild_engine()
+        self._rebuild_engine()  # provedor/chave/modelo podem ter mudado
         if new.hotkey != old.hotkey and self._hotkey:
             try:
                 self._hotkey.set_hotkey(new.hotkey)
@@ -105,18 +110,24 @@ class Controller(QObject):
         self._run_action(self._activation.toggle_button())
 
     def _rebuild_engine(self) -> None:
-        key = resolve_api_key(self.config)
+        provider = self.config.provider
+        key = resolve_provider_key(self.config, provider)
         if not key:
             self._engine = None
             self.failed.emit(
-                "Chave da Groq não configurada (GROQ_API_KEY ou aba Configurações)."
+                f"Chave do provedor '{provider}' não configurada (aba Configurações)."
             )
             return
         try:
-            self._engine = GroqEngine(key, model=self.config.groq_model)
+            self._engine = make_engine(
+                provider, key, provider_model(self.config, provider)
+            )
         except Exception as e:  # noqa: BLE001
             self._engine = None
             self.failed.emit(f"Falha ao iniciar a transcrição: {e}")
+
+    def _engine_label(self) -> str:
+        return f"{self.config.provider}:{provider_model(self.config, self.config.provider)}"
 
     # ---- ativação (thread do Qt) ----
     def _on_start(self) -> None:
@@ -170,7 +181,7 @@ class Controller(QObject):
         if text:
             if self.config.ai_note_enabled:
                 text = append_note(text, self.config.ai_note_text)
-            entry = Transcription.create(text, duration, "groq:" + self.config.groq_model)
+            entry = Transcription.create(text, duration, self._engine_label())
             self.history.add(entry)
             self.historyChanged.emit()
             self._output.deliver(
@@ -222,7 +233,7 @@ class Controller(QObject):
             return
         if self.config.ai_note_enabled:
             text = append_note(text, self.config.ai_note_text)
-        entry = Transcription.create(text, 0.0, "groq-file:" + self.config.groq_model)
+        entry = Transcription.create(text, 0.0, self._engine_label())
         self.history.add(entry)
         self.historyChanged.emit()
         self.fileResult.emit(text, name)
