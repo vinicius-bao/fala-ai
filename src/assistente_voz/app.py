@@ -43,6 +43,7 @@ class Controller(QObject):
     quitRequested = Signal()            # pedir encerramento (ex.: após abrir instalador)
     configApplied = Signal()           # configurações aplicadas (ex.: reaplicar tema)
     refineBusy = Signal(bool)          # refinando a transcrição
+    setupNeeded = Signal(str)          # falta configuração (motivo legível)
     overlayState = Signal(str, str)    # pop-up: (recording|processing|done|hidden, texto)
 
     # internos: trazem eventos de outras threads para a thread do Qt
@@ -154,14 +155,14 @@ class Controller(QObject):
         """Nível atual do microfone (0..1), para a onda do pop-up."""
         return getattr(self._recorder, "level", 0.0)
 
+    def has_api_key(self) -> bool:
+        return bool(resolve_provider_key(self.config, self.config.provider))
+
     def _rebuild_engine(self) -> None:
         provider = self.config.provider
         key = resolve_provider_key(self.config, provider)
         if not key:
-            self._engine = None
-            self.failed.emit(
-                f"Chave do provedor '{provider}' não configurada (aba Configurações)."
-            )
+            self._engine = None  # silencioso: quem avisa é quem tenta usar
             return
         try:
             self._engine = make_engine(
@@ -211,6 +212,13 @@ class Controller(QObject):
         self._emit_state()
 
     def _start_recording(self) -> None:
+        if not self.has_api_key():
+            self._activation.reset()
+            self.overlayState.emit("hidden", "")
+            self.setupNeeded.emit(
+                "Falta a chave de API para transcrever o que você falar."
+            )
+            return
         try:
             self._recorder.start()
         except Exception as e:  # noqa: BLE001
@@ -326,6 +334,9 @@ class Controller(QObject):
         if self._engine is None:
             self._rebuild_engine()
         if self._engine is None:
+            self.setupNeeded.emit(
+                "Falta a chave de API para transcrever este áudio."
+            )
             return
         self.fileBusy.emit(True)
         threading.Thread(

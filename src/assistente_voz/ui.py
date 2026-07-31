@@ -48,6 +48,7 @@ from .config import (
     save_config,
 )
 from .hotkey import parse_hotkey, pretty_hotkey
+from .onboarding import WelcomeDialog
 from .resources import app_icon, logo_pixmap, tray_icon
 
 APP_NAME = "Fala AI"
@@ -383,6 +384,7 @@ class MainWindow(QMainWindow):
                 "Refinando…" if b else "Pronto", 0 if b else 3000
             )
         )
+        controller.setupNeeded.connect(self._show_setup)
         controller.updateAvailable.connect(self._show_update)
         controller.updateUpToDate.connect(
             lambda: self.statusBar().showMessage(
@@ -396,6 +398,41 @@ class MainWindow(QMainWindow):
             lambda m: self.statusBar().showMessage(m, 8000)
         )
         self.refresh_history()
+
+    def show_welcome(self, reason: str = "") -> None:
+        """Abre os primeiros passos (1ª execução ou falta de configuração)."""
+        if getattr(self, "_welcome_open", False):
+            return
+        self._welcome_open = True
+        try:
+            self.show()
+            self.raise_()
+            self.activateWindow()
+            WelcomeDialog(self.controller, self, reason).exec()
+            self._reload_settings_fields()
+        finally:
+            self._welcome_open = False
+
+    def _show_setup(self, reason: str) -> None:
+        self.show_welcome(reason)
+
+    def _reload_settings_fields(self) -> None:
+        """Reflete na aba Configurações o que foi salvo em outro lugar."""
+        cfg = self.controller.config
+        self._loading = True
+        try:
+            self._prov_keys = {
+                "groq": cfg.groq_api_key,
+                "openai": cfg.openai_api_key,
+                "gemini": cfg.gemini_api_key,
+            }
+            self._cur_provider = cfg.provider if cfg.provider in PROVIDERS else "groq"
+            i = self.provider_combo.findData(self._cur_provider)
+            if i >= 0:
+                self.provider_combo.setCurrentIndex(i)
+            self.apikey_edit.setText(self._prov_keys[self._cur_provider])
+        finally:
+            self._loading = False
 
     def _show_update(self, rel) -> None:
         self.show()
@@ -742,6 +779,13 @@ class MainWindow(QMainWindow):
         form.addRow("", check_now_btn)
         col.addWidget(card)
 
+        card, form = _section("Ajuda")
+        help_btn = QPushButton("Ver primeiros passos")
+        help_btn.setCursor(Qt.PointingHandCursor)
+        help_btn.clicked.connect(lambda: self.show_welcome())
+        form.addRow("", help_btn)
+        col.addWidget(card)
+
         note = QLabel("As alterações são salvas automaticamente.")
         note.setObjectName("Muted")
         note.setAlignment(Qt.AlignHCenter)
@@ -858,6 +902,7 @@ class MainWindow(QMainWindow):
             check_updates_on_start=self.update_check_box.isChecked(),
             ai_note_enabled=self.ai_note_box.isChecked(),
             ai_note_text=self.ai_note_edit.text().strip() or AI_NOTE,
+            onboarding_done=self.controller.config.onboarding_done,
         )
         # Atalho inválido: avisa na barra de status e não grava (sem modal, já
         # que o salvamento agora é automático).
@@ -914,12 +959,15 @@ class TrayApp:
         open_action.triggered.connect(self.show_window)
         file_action = QAction("Transcrever arquivo de áudio…", menu)
         file_action.triggered.connect(window._open_audio_file)
+        help_action = QAction("Primeiros passos…", menu)
+        help_action.triggered.connect(lambda: window.show_welcome())
         update_action = QAction("Verificar atualizações…", menu)
         update_action.triggered.connect(lambda: controller.check_updates(manual=True))
         quit_action = QAction("Sair", menu)
         quit_action.triggered.connect(self._quit)
         menu.addAction(open_action)
         menu.addAction(file_action)
+        menu.addAction(help_action)
         menu.addAction(update_action)
         menu.addSeparator()
         menu.addAction(quit_action)

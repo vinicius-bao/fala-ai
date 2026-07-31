@@ -132,6 +132,11 @@ def build_qss(
     #Hero {{ background-color: {p.surface}; border-bottom: 1px solid {p.border}; }}
     QLabel#Muted {{ color: {p.text_muted}; }}
     #SectionTitle {{ font-size: 13px; font-weight: 500; color: {p.text}; }}
+    #StepNum {{ background-color: {p.accent}; color: {p.accent_text};
+        border-radius: 11px; font-size: 12px; font-weight: 500; }}
+    #Alert {{ background-color: {p.surface_alt}; color: {p.text};
+        border: 1px solid {p.warning}; border-radius: 8px; padding: 9px 12px; }}
+    #Sep {{ background-color: {p.border}; max-height: 1px; border: none; }}
 
     #Card {{ background-color: {p.surface}; border: 1px solid {p.border};
         border-radius: 12px; }}

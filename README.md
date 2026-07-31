@@ -25,6 +25,16 @@ python -m venv .venv
 pip install -e .
 ```
 
+## Primeiro uso
+
+Na primeira vez que abre, o app mostra os **primeiros passos**: explica como
+funciona (os dois atalhos e o arrastar-e-soltar) e pede a **chave de API**, com
+um botão que abre a página para criá-la. Dá para pular e configurar depois.
+
+Se você tentar gravar ou transcrever sem a chave, o app avisa e reabre essa tela
+em vez de falhar em silêncio. Para revê-la a qualquer momento: bandeja →
+*Primeiros passos…*, ou Configurações → *Ajuda*.
+
 ## Configurar a chave da Groq
 
 Escolha **uma** das opções:

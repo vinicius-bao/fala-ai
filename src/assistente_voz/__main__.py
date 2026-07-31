@@ -105,6 +105,8 @@ def main() -> int:
         QTimer.singleShot(3000, lambda: controller.check_updates(manual=False))
 
     window.show()  # primeira execução mostra a janela; feche-a para a bandeja
+    if not cfg.onboarding_done:
+        QTimer.singleShot(300, window.show_welcome)
     return app.exec()
 
 

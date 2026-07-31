@@ -123,6 +123,7 @@ class Config:
     context_dir: str = ""              # pasta de documentação usada como contexto
     update_repo: str = ""              # ex.: "usuario/fala-ai" (GitHub Releases)
     check_updates_on_start: bool = True
+    onboarding_done: bool = False      # já viu a tela de primeiros passos?
     ai_note_enabled: bool = False     # acrescentar o rótulo de IA às transcrições
     ai_note_text: str = AI_NOTE       # texto do rótulo (personalizável)
 

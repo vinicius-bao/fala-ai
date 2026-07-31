@@ -338,3 +338,15 @@ principalmente **mensagens de voz do WhatsApp**.
 - **Pílula de versão é um botão:** clicar consulta atualizações (`check_updates`).
 - **Roda do mouse:** `NoScrollComboBox`/`NoScrollSpinBox` ignoram o `wheelEvent`,
   para rolar a página não trocar a opção selecionada. Só teclado, setas e clique.
+
+## 25. Adendo — Primeiros passos (onboarding)
+
+- `onboarding.py`: `WelcomeDialog` explica o app em 3 passos (atalho de ditado,
+  atalho de refino, arrastar áudio) e coleta provedor + chave, com botão que
+  abre a página da chave (`KEY_URLS`). Botões "Fazer depois" e "Começar a usar".
+- Aparece na 1ª execução (`config.onboarding_done`) e é reaberto pela bandeja
+  (*Primeiros passos…*) ou por Configurações → Ajuda.
+- **Erros acionáveis:** `Controller.setupNeeded` é emitido quando o usuário tenta
+  gravar (`_start_recording`) ou transcrever um arquivo sem chave; a janela abre
+  o mesmo diálogo com o motivo em destaque, em vez de falhar em silêncio.
+  `_rebuild_engine` ficou silencioso — quem avisa é quem tenta usar.
