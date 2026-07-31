@@ -101,6 +101,7 @@ class Config:
     hotkey: str = "ctrl+alt+space"
     tap_threshold_ms: int = 400
     language: str = "pt"
+    input_device: str = ""             # nome do microfone; "" = padrão do sistema
     theme_mode: str = "auto"           # "auto" | "light" | "dark"
     output_mode: str = "paste"          # "paste" | "clipboard_only"
     restore_clipboard: bool = False     # restaurar clipboard anterior após colar

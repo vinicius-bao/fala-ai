@@ -22,6 +22,11 @@ Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
 PrivilegesRequired=lowest
+; Detecta o Fala AI aberto e oferece fechá-lo antes de atualizar (evita
+; arquivo em uso). O app cria esse mutex ao iniciar.
+AppMutex=FalaAI-SingleInstance-Mutex
+CloseApplications=yes
+RestartApplications=no
 ; Usa o ícone só se você já gerou assets\icon.ico (veja assets/README.md).
 #if FileExists("assets\icon.ico")
 SetupIconFile=assets\icon.ico

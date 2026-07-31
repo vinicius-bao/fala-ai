@@ -6,10 +6,42 @@ import io
 import wave
 
 
+def list_input_devices() -> list[str]:
+    """Nomes dos microfones disponíveis (vazio se o áudio não estiver ok)."""
+    try:
+        import sounddevice as sd
+
+        seen, names = set(), []
+        for dev in sd.query_devices():
+            name = (dev.get("name") or "").strip()
+            if dev.get("max_input_channels", 0) > 0 and name and name not in seen:
+                seen.add(name)
+                names.append(name)
+        return names
+    except Exception:  # noqa: BLE001 — sem áudio disponível
+        return []
+
+
+def resolve_device(name: str):
+    """Converte o nome do microfone em índice; None = padrão do sistema."""
+    if not name:
+        return None
+    try:
+        import sounddevice as sd
+
+        for idx, dev in enumerate(sd.query_devices()):
+            if dev.get("max_input_channels", 0) > 0 and dev.get("name") == name:
+                return idx
+    except Exception:  # noqa: BLE001
+        pass
+    return None  # sumiu (desconectado): cai no padrão
+
+
 class Recorder:
-    def __init__(self, samplerate: int = 16000, channels: int = 1):
+    def __init__(self, samplerate: int = 16000, channels: int = 1, device: str = ""):
         self.samplerate = samplerate
         self.channels = channels
+        self.device = device  # nome do microfone; "" = padrão do sistema
         self._frames: list[bytes] = []
         self._stream = None
         self.last_duration_s = 0.0
@@ -28,6 +60,7 @@ class Recorder:
             samplerate=self.samplerate,
             channels=self.channels,
             dtype="int16",
+            device=resolve_device(self.device),
             callback=self._callback,
         )
         self._stream.start()

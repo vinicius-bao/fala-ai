@@ -7,6 +7,7 @@ separada para não travar a interface.
 
 from __future__ import annotations
 
+import os
 import threading
 import time
 
@@ -44,6 +45,7 @@ class Controller(QObject):
     configApplied = Signal()           # configurações aplicadas (ex.: reaplicar tema)
     refineBusy = Signal(bool)          # refinando a transcrição
     setupNeeded = Signal(str)          # falta configuração (motivo legível)
+    pendingChanged = Signal(int)       # quantos áudios ficaram para reenviar
     overlayState = Signal(str, str)    # pop-up: (recording|processing|done|hidden, texto)
 
     # internos: trazem eventos de outras threads para a thread do Qt
@@ -66,7 +68,7 @@ class Controller(QObject):
         self.config = config
         self.history = history
         self._activation = Activation(config.tap_threshold_ms)
-        self._recorder = Recorder()
+        self._recorder = Recorder(device=config.input_device)
         self._output = TextOutput()
         self._engine = None
         self._refiner = None
@@ -134,6 +136,7 @@ class Controller(QObject):
         self.config = new
         self._activation.tap_threshold_ms = new.tap_threshold_ms
         self.history.max_size = new.history_size
+        self._recorder.device = new.input_device
         self._rebuild_engine()  # provedor/chave/modelo podem ter mudado
         self._rebuild_refiner()
         if new.hotkey != old.hotkey and self._hotkey:
@@ -317,13 +320,40 @@ class Controller(QObject):
 
     def _on_failed(self, message: str, wav: bytes) -> None:
         self._activation.on_transcription_done()
-        path = self._save_failed_audio(wav)
-        self.failed.emit(f"Falha na transcrição: {message}\nÁudio salvo em: {path}")
+        self._save_failed_audio(wav)
+        self.failed.emit(
+            f"Falha na transcrição: {message} — guardei o áudio para reenviar."
+        )
+        self.pendingChanged.emit(len(self.pending_audios()))
         self.overlayState.emit("hidden", "")
         self._emit_state()
 
+    # ---- áudios que falharam e ficaram guardados ----
+    def pending_dir(self):
+        return config_dir() / "audios_pendentes"
+
+    def pending_audios(self) -> list:
+        try:
+            return sorted(self.pending_dir().glob("*.wav"))
+        except Exception:  # noqa: BLE001
+            return []
+
+    def retry_pending(self) -> None:
+        """Reenvia o áudio pendente mais antigo (apaga se der certo)."""
+        files = self.pending_audios()
+        if not files:
+            return
+        self.transcribe_file(str(files[0]), delete_after=True)
+
+    def discard_pending(self) -> None:
+        for f in self.pending_audios():
+            try:
+                f.unlink()
+            except OSError:
+                pass
+
     # ---- transcrição de arquivo de áudio (drag-and-drop / botão) ----
-    def transcribe_file(self, path: str) -> None:
+    def transcribe_file(self, path: str, delete_after: bool = False) -> None:
         from .audiofile import AudioFileError, read_audio
 
         try:
@@ -331,6 +361,7 @@ class Controller(QObject):
         except AudioFileError as e:
             self.failed.emit(str(e))
             return
+        self._file_source = path if delete_after else ""
         if self._engine is None:
             self._rebuild_engine()
         if self._engine is None:
@@ -357,6 +388,15 @@ class Controller(QObject):
 
     def _on_file_ready(self, text: str, name: str) -> None:
         self.fileBusy.emit(False)
+        # Deu certo: o áudio guardado por falha anterior já cumpriu seu papel.
+        source = getattr(self, "_file_source", "")
+        if source:
+            self._file_source = ""
+            try:
+                os.remove(source)
+            except OSError:
+                pass
+            self.pendingChanged.emit(len(self.pending_audios()))
         text = text.strip()
         if not text:
             self.failed.emit("Transcrição vazia (o áudio tem fala?).")
@@ -453,7 +493,7 @@ class Controller(QObject):
 
     def _save_failed_audio(self, wav: bytes) -> str:
         try:
-            d = config_dir() / "audios_pendentes"
+            d = self.pending_dir()
             d.mkdir(parents=True, exist_ok=True)
             p = d / f"audio_{int(time.time())}.wav"
             p.write_bytes(wav)

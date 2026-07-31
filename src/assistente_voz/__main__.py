@@ -4,14 +4,22 @@ from __future__ import annotations
 
 import sys
 
+_WIN_MUTEX = None  # mantém o mutex vivo enquanto o app roda
+
 
 def main() -> int:
-    # Identidade do app no Windows (taskbar/ícone agrupam corretamente).
+    # Identidade do app no Windows (taskbar/ícone agrupam corretamente) e um
+    # mutex nomeado, que o instalador usa para detectar o app aberto e fechá-lo
+    # antes de atualizar (AppMutex do Inno Setup).
+    global _WIN_MUTEX
     if sys.platform == "win32":
         try:
             import ctypes
 
             ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("FalaAI")
+            _WIN_MUTEX = ctypes.windll.kernel32.CreateMutexW(
+                None, False, "FalaAI-SingleInstance-Mutex"
+            )
         except Exception:
             pass
 

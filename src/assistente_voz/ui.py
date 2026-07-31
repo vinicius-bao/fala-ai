@@ -34,6 +34,7 @@ from PySide6.QtWidgets import (
 
 from . import icons
 from .app import Controller
+from .audio import list_input_devices
 from .audiofile import SUPPORTED_EXTS, is_supported
 from .config import (
     AI_NOTE,
@@ -399,6 +400,7 @@ class MainWindow(QMainWindow):
             )
         )
         controller.setupNeeded.connect(self._show_setup)
+        controller.pendingChanged.connect(self._update_pending)
         controller.updateAvailable.connect(self._show_update)
         controller.updateUpToDate.connect(
             lambda: self.statusBar().showMessage(
@@ -412,6 +414,7 @@ class MainWindow(QMainWindow):
             lambda m: self.statusBar().showMessage(m, 8000)
         )
         self.refresh_history()
+        self._update_pending()
 
     def show_welcome(self, reason: str = "") -> None:
         """Abre os primeiros passos (1ª execução ou falta de configuração)."""
@@ -586,6 +589,26 @@ class MainWindow(QMainWindow):
         top.addWidget(clear_btn)
         lay.addLayout(top)
 
+        # Faixa que aparece só quando algum áudio ficou para reenviar.
+        self.pending_bar = QFrame()
+        self.pending_bar.setObjectName("Card")
+        pb = QHBoxLayout(self.pending_bar)
+        pb.setContentsMargins(12, 8, 10, 8)
+        pb.setSpacing(8)
+        self.pending_label = QLabel()
+        pb.addWidget(self.pending_label, 1)
+        retry_btn = QPushButton("Tentar de novo")
+        retry_btn.setObjectName("Primary")
+        retry_btn.setCursor(Qt.PointingHandCursor)
+        retry_btn.clicked.connect(self.controller.retry_pending)
+        discard_btn = QPushButton("Descartar")
+        discard_btn.setCursor(Qt.PointingHandCursor)
+        discard_btn.clicked.connect(self._discard_pending)
+        pb.addWidget(retry_btn)
+        pb.addWidget(discard_btn)
+        self.pending_bar.hide()
+        lay.addWidget(self.pending_bar)
+
         self.history_list = QListWidget()
         self.history_list.setObjectName("HistoryList")
         self.history_list.setSpacing(6)
@@ -617,6 +640,26 @@ class MainWindow(QMainWindow):
             self.history_list.addItem(item)
             self.history_list.setItemWidget(item, card)
 
+    def _update_pending(self, count: int | None = None) -> None:
+        if count is None:
+            count = len(self.controller.pending_audios())
+        self.pending_bar.setVisible(count > 0)
+        if count:
+            plural = "s" if count > 1 else ""
+            self.pending_label.setText(
+                f"{count} áudio{plural} não enviado{plural} (falha de conexão)"
+            )
+
+    def _discard_pending(self) -> None:
+        if (
+            QMessageBox.question(
+                self, "Descartar áudios", "Apagar os áudios que não foram enviados?"
+            )
+            == QMessageBox.Yes
+        ):
+            self.controller.discard_pending()
+            self._update_pending()
+
     def _copy_text(self, text: str) -> None:
         QApplication.clipboard().setText(text)
         self.statusBar().showMessage("Copiado!", 2000)
@@ -647,7 +690,18 @@ class MainWindow(QMainWindow):
         self.threshold_spin.setValue(cfg.tap_threshold_ms)
         self.threshold_spin.setSuffix(" ms")
         self.language_edit = QLineEdit(cfg.language)
+        self.device_combo = NoScrollComboBox()
+        self.device_combo.addItem("Padrão do sistema", "")
+        for name in list_input_devices():
+            self.device_combo.addItem(name, name)
+        _di = self.device_combo.findData(cfg.input_device)
+        if _di < 0 and cfg.input_device:  # microfone salvo não está conectado
+            self.device_combo.addItem(f"{cfg.input_device} (desconectado)",
+                                      cfg.input_device)
+            _di = self.device_combo.count() - 1
+        self.device_combo.setCurrentIndex(max(0, _di))
         form.addRow("Atalho", self.hotkey_btn)
+        form.addRow("Microfone", self.device_combo)
         form.addRow("Limiar toque/segurar", self.threshold_spin)
         form.addRow("Idioma", self.language_edit)
         col.addWidget(card)
@@ -832,6 +886,7 @@ class MainWindow(QMainWindow):
         for w in (self.threshold_spin, self.history_spin):
             w.valueChanged.connect(self._queue_save)
         for w in (
+            self.device_combo,
             self.theme_combo,
             self.output_combo,
             self.provider_combo,
@@ -891,6 +946,7 @@ class MainWindow(QMainWindow):
             hotkey=self.hotkey_btn.value(),
             tap_threshold_ms=self.threshold_spin.value(),
             language=self.language_edit.text().strip() or "pt",
+            input_device=self.device_combo.currentData() or "",
             theme_mode=self.theme_combo.currentData(),
             output_mode=self.output_combo.currentData(),
             restore_clipboard=self.restore_check.isChecked(),

@@ -197,8 +197,13 @@ class RecordingOverlay(QWidget):
         self._dot.setPixmap(_badge(icon_name, color, 24))
 
     def _show_at_bottom(self) -> None:
+        from PySide6.QtGui import QCursor
+
         self.adjustSize()
-        screen = QApplication.primaryScreen().availableGeometry()
+        # Segue o monitor onde está o cursor (não o principal) — quem usa dois
+        # monitores estava vendo o pop-up sempre na tela errada.
+        scr = QApplication.screenAt(QCursor.pos()) or QApplication.primaryScreen()
+        screen = scr.availableGeometry()
         x = screen.center().x() - self.width() // 2
         y = screen.bottom() - self.height() - 50
         self.move(x, y)
