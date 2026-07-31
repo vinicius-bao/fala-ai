@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPlainTextEdit,
     QPushButton,
+    QScrollArea,
     QSpinBox,
     QSystemTrayIcon,
     QTabWidget,
@@ -32,7 +33,9 @@ from .app import Controller
 from .audiofile import SUPPORTED_EXTS, is_supported
 from .config import (
     AI_NOTE,
+    DEFAULT_CHAT_MODELS,
     DEFAULT_MODELS,
+    DEFAULT_REFINE_PROMPT,
     PROVIDER_LABELS,
     PROVIDERS,
     Config,
@@ -211,6 +214,11 @@ class MainWindow(QMainWindow):
         controller.stateChanged.connect(self._on_state)
         controller.fileResult.connect(self._show_file_result)
         controller.fileBusy.connect(self._on_file_busy)
+        controller.refineBusy.connect(
+            lambda b: self.statusBar().showMessage(
+                "✨ Refinando…" if b else "Pronto", 0 if b else 3000
+            )
+        )
         controller.updateAvailable.connect(self._show_update)
         controller.updateUpToDate.connect(
             lambda: self.statusBar().showMessage(
@@ -404,6 +412,33 @@ class MainWindow(QMainWindow):
         self.apikey_edit.setEchoMode(QLineEdit.Password)
         self.apikey_edit.setPlaceholderText("cole a chave do provedor selecionado")
         self.provider_combo.currentIndexChanged.connect(self._on_provider_changed)
+
+        # --- Refinamento (2º atalho) ---
+        self.refine_hotkey_btn = HotkeyCaptureButton(cfg.refine_hotkey)
+        self.refiner_combo = QComboBox()
+        for _rp in PROVIDERS:
+            self.refiner_combo.addItem(PROVIDER_LABELS[_rp], _rp)
+        _ri = self.refiner_combo.findData(cfg.refiner_provider)
+        self.refiner_combo.setCurrentIndex(_ri if _ri >= 0 else 0)
+        self.refiner_model_edit = QLineEdit(
+            cfg.refiner_model or DEFAULT_CHAT_MODELS.get(cfg.refiner_provider, "")
+        )
+        self.refiner_combo.currentIndexChanged.connect(self._on_refiner_changed)
+        self.refine_prompt_edit = QPlainTextEdit(
+            cfg.refine_prompt or DEFAULT_REFINE_PROMPT
+        )
+        self.refine_prompt_edit.setFixedHeight(90)
+        self.context_box = QCheckBox("Usar pasta de contexto no refinamento")
+        self.context_box.setChecked(cfg.context_enabled)
+        self.context_dir_edit = QLineEdit(cfg.context_dir)
+        self.context_dir_edit.setPlaceholderText("pasta com .md/.txt de referência")
+        context_browse = QPushButton("Escolher pasta…")
+        context_browse.clicked.connect(self._browse_context)
+        context_row = QWidget()
+        _crl = QHBoxLayout(context_row)
+        _crl.setContentsMargins(0, 0, 0, 0)
+        _crl.addWidget(self.context_dir_edit)
+        _crl.addWidget(context_browse)
         self.update_check_box = QCheckBox("Verificar atualizações ao iniciar")
         self.update_check_box.setChecked(cfg.check_updates_on_start)
         check_now_btn = QPushButton("Verificar atualizações agora")
@@ -427,10 +462,20 @@ class MainWindow(QMainWindow):
         form.addRow("Provedor:", self.provider_combo)
         form.addRow("Modelo:", self.model_edit)
         form.addRow("Chave (API):", self.apikey_edit)
+        form.addRow("Atalho refino:", self.refine_hotkey_btn)
+        form.addRow("Refinador (provedor):", self.refiner_combo)
+        form.addRow("Refinador (modelo):", self.refiner_model_edit)
+        form.addRow("Prompt de refino:", self.refine_prompt_edit)
+        form.addRow("", self.context_box)
+        form.addRow("Pasta de contexto:", context_row)
         form.addRow("", self.update_check_box)
         form.addRow("", check_now_btn)
         form.addRow(save_btn)
-        return w
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QScrollArea.NoFrame)
+        scroll.setWidget(w)
+        return scroll
 
     def _on_provider_changed(self) -> None:
         # guarda o que está nos campos para o provedor anterior
@@ -440,6 +485,15 @@ class MainWindow(QMainWindow):
         self._cur_provider = p
         self.model_edit.setText(self._prov_models.get(p) or DEFAULT_MODELS[p])
         self.apikey_edit.setText(self._prov_keys.get(p, ""))
+
+    def _on_refiner_changed(self) -> None:
+        p = self.refiner_combo.currentData()
+        self.refiner_model_edit.setText(DEFAULT_CHAT_MODELS.get(p, ""))
+
+    def _browse_context(self) -> None:
+        folder = QFileDialog.getExistingDirectory(self, "Escolher pasta de contexto")
+        if folder:
+            self.context_dir_edit.setText(folder)
 
     def _save_settings(self) -> None:
         self._prov_keys[self._cur_provider] = self.apikey_edit.text().strip()
@@ -460,6 +514,14 @@ class MainWindow(QMainWindow):
             openai_api_key=self._prov_keys["openai"],
             gemini_model=self._prov_models["gemini"] or DEFAULT_MODELS["gemini"],
             gemini_api_key=self._prov_keys["gemini"],
+            refine_hotkey=self.refine_hotkey_btn.value(),
+            refiner_provider=self.refiner_combo.currentData(),
+            refiner_model=self.refiner_model_edit.text().strip()
+            or DEFAULT_CHAT_MODELS.get(self.refiner_combo.currentData(), ""),
+            refine_prompt=self.refine_prompt_edit.toPlainText().strip()
+            or DEFAULT_REFINE_PROMPT,
+            context_enabled=self.context_box.isChecked(),
+            context_dir=self.context_dir_edit.text().strip(),
             check_updates_on_start=self.update_check_box.isChecked(),
             ai_note_enabled=self.ai_note_box.isChecked(),
             ai_note_text=self.ai_note_edit.text().strip() or AI_NOTE,
@@ -469,6 +531,12 @@ class MainWindow(QMainWindow):
         except ValueError as e:
             QMessageBox.warning(self, "Atalho inválido", str(e))
             return
+        if cfg.refine_hotkey:
+            try:
+                parse_hotkey(cfg.refine_hotkey)
+            except ValueError as e:
+                QMessageBox.warning(self, "Atalho de refino inválido", str(e))
+                return
         save_config(cfg)
         self.controller.apply_config(cfg)
         try:
@@ -531,6 +599,7 @@ class TrayApp:
         self.tray.activated.connect(self._on_activated)
         controller.stateChanged.connect(self._on_state)
         controller.fileBusy.connect(self._on_file_busy)
+        controller.refineBusy.connect(self._on_file_busy)
         self._notified = False
         window.minimizedToTray.connect(self._notify_minimized)
         self.tray.show()

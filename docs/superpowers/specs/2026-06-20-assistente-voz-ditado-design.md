@@ -300,3 +300,15 @@ principalmente **mensagens de voz do WhatsApp**.
   `TranscriptionEngine` + `make_engine(provider, key, model)` — Groq/OpenAI via
   SDK, Gemini via REST (urllib). Config: `provider`, `{groq,openai,gemini}_model`
   e `_api_key`; helpers `resolve_provider_key` e `provider_model`.
+
+## 22. Adendo — Refinamento por LLM (2º atalho) e pasta de contexto
+
+- **2º atalho** (padrão `ctrl+alt+w`): grava, transcreve e manda a transcrição a
+  um **LLM de chat** para revisar (corrige português/clareza, sem inventar). Se
+  falhar, cai pro texto cru. Config: `refine_hotkey`, `refiner_provider`,
+  `refiner_model`, `refine_prompt` (editável). `refiner.make_refiner`
+  (Groq/OpenAI via SDK, Gemini via REST); reaproveita as chaves dos provedores.
+- **Pasta de contexto** (opcional): `context_enabled` + `context_dir`.
+  `context.load_context` lê `.md`/`.txt` (com limite de tamanho) e injeta como
+  referência no prompt do refino, para o modelo corrigir *entendendo* o assunto.
+  RAG por embeddings fica como evolução futura.

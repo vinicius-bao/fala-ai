@@ -34,6 +34,18 @@ DEFAULT_MODELS = {
     "openai": "gpt-4o-transcribe",
     "gemini": "gemini-2.0-flash",
 }
+# Modelos de CHAT (usados no refinamento).
+DEFAULT_CHAT_MODELS = {
+    "groq": "llama-3.3-70b-versatile",
+    "openai": "gpt-4o-mini",
+    "gemini": "gemini-2.0-flash",
+}
+DEFAULT_REFINE_PROMPT = (
+    "Você é um revisor de texto. Corrija erros de português, pontuação e clareza "
+    "do texto a seguir, mantendo o sentido e o tom da pessoa. Não invente "
+    "informações, não responda ao conteúdo e não adicione comentários — devolva "
+    "apenas o texto revisado."
+)
 _PROVIDER_ENV = {
     "groq": ("GROQ_API_KEY",),
     "openai": ("OPENAI_API_KEY",),
@@ -58,6 +70,12 @@ class Config:
     openai_api_key: str = ""           # vazio => usa OPENAI_API_KEY do ambiente
     gemini_model: str = "gemini-2.0-flash"
     gemini_api_key: str = ""           # vazio => usa GEMINI_API_KEY do ambiente
+    refine_hotkey: str = "ctrl+alt+w"  # 2º atalho: transcreve e refina via LLM
+    refiner_provider: str = "groq"
+    refiner_model: str = "llama-3.3-70b-versatile"
+    refine_prompt: str = DEFAULT_REFINE_PROMPT
+    context_enabled: bool = False
+    context_dir: str = ""              # pasta de documentação usada como contexto
     update_repo: str = ""              # ex.: "usuario/fala-ai" (GitHub Releases)
     check_updates_on_start: bool = True
     ai_note_enabled: bool = False     # acrescentar o rótulo de IA às transcrições

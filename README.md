@@ -67,6 +67,18 @@ mandá-lo para a bandeja; clique no ícone para reabrir.
 O atalho e todas as opções são configuráveis na aba *Configurações* — o atalho
 tem um capturador: clique em "Definir atalho" e pressione a combinação desejada.
 
+### Refinar a transcrição (2º atalho)
+
+Há um **segundo atalho** (padrão `Ctrl+Alt+W`) que grava, transcreve e ainda
+passa o texto por um **LLM** para corrigir português e clareza (sem inventar
+conteúdo) antes de colar. Configure o *Refinador* (provedor + modelo de chat) e o
+*Prompt de refino* na aba *Configurações*. O `Ctrl+Alt+Espaço` continua colando o
+texto **cru**.
+
+Opcional: aponte uma **Pasta de contexto** (com arquivos `.md`/`.txt`) para o
+refinador usar como referência e corrigir *entendendo* o assunto (seus termos,
+nomes, estilo). Se o refino falhar, o app cola o texto cru.
+
 ### Transcrever um áudio (ex.: mensagem de voz do WhatsApp)
 
 Além de ditar ao vivo, dá para transcrever arquivos de áudio que você já tem:
