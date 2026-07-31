@@ -77,7 +77,18 @@ def _qt_key_to_token(key: int) -> str:
 
 
 class NoScrollComboBox(QComboBox):
-    """Combo que ignora a roda do mouse (evita trocar opção ao rolar a página)."""
+    """Combo que ignora a roda do mouse e não impõe largura pelo texto.
+
+    Sem isso, uma opção longa ("Automático (segue o Windows)") vira largura
+    mínima da janela inteira — e em telas com escala 125% o conteúdo era
+    cortado.
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
+        self.setMinimumContentsLength(8)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
     def wheelEvent(self, event):  # noqa: N802
         event.ignore()
@@ -175,6 +186,10 @@ def _section(title: str) -> tuple[QFrame, QFormLayout]:
     form.setFormAlignment(Qt.AlignTop)
     form.setHorizontalSpacing(14)
     form.setVerticalSpacing(10)
+    # Em janelas estreitas (ou com fonte grande por causa da escala da tela),
+    # o rótulo passa para cima do campo em vez de espremer/cortar a linha.
+    form.setRowWrapPolicy(QFormLayout.WrapLongRows)
+    form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
     box.addLayout(form)
     return card, form
 
@@ -395,6 +410,7 @@ class MainWindow(QMainWindow):
         self.setWindowIcon(app_icon())
         self.resize(620, 640)
         self.setAcceptDrops(True)
+        self._min_applied = False
         self._loading = True
         self._save_timer = QTimer(self)
         self._save_timer.setSingleShot(True)
@@ -904,7 +920,9 @@ class MainWindow(QMainWindow):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.NoFrame)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        # Vertical escondida (rola com a roda). A horizontal fica "se precisar":
+        # é rede de segurança — melhor uma barra rara do que cortar conteúdo.
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         scroll.setWidget(page)
         return scroll
@@ -1044,6 +1062,17 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(labels.get(state, state))
         if hasattr(self, "record_btn"):
             self.record_btn.set_recording(state == "recording")
+
+    def showEvent(self, event):  # noqa: N802
+        super().showEvent(event)
+        # A janela não pode ficar menor do que o conteúdo precisa. Como o
+        # QScrollArea esconde essa necessidade (ele corta em vez de reclamar),
+        # calculamos o mínimo depois do primeiro layout — assim vale também
+        # para telas com escala 125%/150%, onde a fonte é maior.
+        if not self._min_applied:
+            self._min_applied = True
+            need = self.centralWidget().minimumSizeHint().width() + 24
+            self.setMinimumSize(max(480, need), 420)
 
     def closeEvent(self, event):  # noqa: N802 — fecha para a bandeja
         self._flush_save()  # não perde edição pendente ao fechar
