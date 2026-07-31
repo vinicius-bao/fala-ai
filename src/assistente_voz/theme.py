@@ -161,6 +161,8 @@ def build_qss(
     #TimePill {{ color: {p.text_muted}; background-color: {p.surface_alt};
         border-radius: 6px; padding: 3px 7px; font-size: 11px; }}
     #CardText {{ color: {p.text}; font-size: 12px; }}
+    #RefinedPill {{ color: {p.accent_text}; background-color: {p.accent};
+        border-radius: 8px; padding: 2px 8px; font-size: 10px; }}
 
     QTabWidget::pane {{ border: none; background: {p.bg}; }}
     QTabWidget::tab-bar {{ alignment: center; }}

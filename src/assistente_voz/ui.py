@@ -182,33 +182,60 @@ def _section(title: str) -> tuple[QFrame, QFormLayout]:
 class HistoryCard(QFrame):
     """Item do histórico: hora, texto e botão de copiar."""
 
-    def __init__(self, time_text: str, text: str, on_copy, parent=None):
+    def __init__(self, entry, on_copy, on_refine, parent=None):
         super().__init__(parent)
         self.setObjectName("HistoryCard")
         self.setMinimumHeight(50)
+        self.uid = entry.uid
         lay = QHBoxLayout(self)
         lay.setContentsMargins(12, 10, 10, 10)
         lay.setSpacing(10)
-        stamp = QLabel(time_text)
+
+        stamp = QLabel(entry.timestamp[11:16] if len(entry.timestamp) >= 16 else "")
         stamp.setObjectName("TimePill")
-        self._full = " ".join(text.split())
+        self._full = " ".join(entry.text.split())
         body = QLabel()
         body.setObjectName("CardText")
         # Sem largura fixa: o texto é cortado conforme o espaço real do cartão
         # (calculado no resize), então nunca estoura a lista.
         body.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
-        body.setToolTip(text)
+        body.setToolTip(entry.text)
         self._body = body
+
+        lay.addWidget(stamp)
+        lay.addWidget(body, 1)
+
+        if entry.refined:
+            mark = "refinado" if entry.refined == 1 else f"refinado {entry.refined}×"
+            self._badge = QLabel(mark)
+            self._badge.setObjectName("RefinedPill")
+            if entry.original:
+                self._badge.setToolTip("Texto original:\n\n" + entry.original)
+            lay.addWidget(self._badge)
+
+        self._refine_btn = QPushButton()
+        self._refine_btn.setObjectName("IconBtn")
+        self._refine_btn.setCursor(Qt.PointingHandCursor)
+        self._refine_btn.setIcon(icons.icon("sparkle", 18, "#9A93A6"))
+        self._refine_btn.setFixedSize(30, 30)
+        self._refine_btn.setToolTip(
+            "Refinar de novo com IA" if entry.refined else "Refinar com IA"
+        )
+        self._refine_btn.clicked.connect(lambda: on_refine(entry.uid))
+        lay.addWidget(self._refine_btn)
+
         copy_btn = QPushButton()
         copy_btn.setObjectName("IconBtn")
         copy_btn.setCursor(Qt.PointingHandCursor)
         copy_btn.setIcon(icons.icon("copy", 18, "#9A93A6"))
         copy_btn.setFixedSize(30, 30)
         copy_btn.setToolTip("Copiar")
-        copy_btn.clicked.connect(lambda: on_copy(text))
-        lay.addWidget(stamp)
-        lay.addWidget(body, 1)
+        copy_btn.clicked.connect(lambda: on_copy(entry.text))
         lay.addWidget(copy_btn)
+
+    def set_busy(self, busy: bool) -> None:
+        self._refine_btn.setEnabled(not busy)
+        self._refine_btn.setToolTip("Refinando…" if busy else "Refinar com IA")
 
     def _elide(self) -> None:
         w = self._body.width()
@@ -401,6 +428,7 @@ class MainWindow(QMainWindow):
         )
         controller.setupNeeded.connect(self._show_setup)
         controller.pendingChanged.connect(self._update_pending)
+        controller.itemRefineBusy.connect(self._on_item_refine_busy)
         controller.updateAvailable.connect(self._show_update)
         controller.updateUpToDate.connect(
             lambda: self.statusBar().showMessage(
@@ -631,9 +659,10 @@ class MainWindow(QMainWindow):
         entries = self.controller.history.recent(self.controller.config.history_size)
         self.empty_label.setVisible(not entries)
         self.history_list.setVisible(bool(entries))
+        self._cards = {}
         for entry in entries:
-            stamp = entry.timestamp[11:16] if len(entry.timestamp) >= 16 else ""
-            card = HistoryCard(stamp, entry.text, self._copy_text)
+            card = HistoryCard(entry, self._copy_text, self._refine_entry)
+            self._cards[entry.uid] = card
             item = QListWidgetItem()
             # Largura 1: a lista estica o item até a área visível sozinha.
             item.setSizeHint(QSize(1, max(50, card.sizeHint().height())))
@@ -659,6 +688,17 @@ class MainWindow(QMainWindow):
         ):
             self.controller.discard_pending()
             self._update_pending()
+
+    def _refine_entry(self, uid: str) -> None:
+        self.statusBar().showMessage("Refinando o texto…", 0)
+        self.controller.refine_history_item(uid)
+
+    def _on_item_refine_busy(self, uid: str, busy: bool) -> None:
+        card = getattr(self, "_cards", {}).get(uid)
+        if card is not None:
+            card.set_busy(busy)
+        if not busy:
+            self.statusBar().showMessage("Texto refinado ✓", 3000)
 
     def _copy_text(self, text: str) -> None:
         QApplication.clipboard().setText(text)

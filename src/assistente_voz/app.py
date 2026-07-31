@@ -46,6 +46,7 @@ class Controller(QObject):
     refineBusy = Signal(bool)          # refinando a transcrição
     setupNeeded = Signal(str)          # falta configuração (motivo legível)
     pendingChanged = Signal(int)       # quantos áudios ficaram para reenviar
+    itemRefineBusy = Signal(str, bool)  # (uid, refinando) — item do histórico
     overlayState = Signal(str, str)    # pop-up: (recording|processing|done|hidden, texto)
 
     # internos: trazem eventos de outras threads para a thread do Qt
@@ -55,6 +56,8 @@ class Controller(QObject):
     _hkReleaseRefine = Signal(float)
     _refineReady = Signal(str, float)
     _refineFailed = Signal(str, str, float)   # (erro, texto cru, duração)
+    _itemRefineReady = Signal(str, str)       # (uid, texto refinado)
+    _itemRefineFailed = Signal(str, str)      # (uid, erro)
     _transcriptionReady = Signal(str, float)
     _transcriptionFailed = Signal(str, object)  # (mensagem, wav bytes)
     _fileReady = Signal(str, str)
@@ -89,6 +92,8 @@ class Controller(QObject):
         self._hkReleaseRefine.connect(self._on_release, Qt.QueuedConnection)
         self._refineReady.connect(self._on_refine_ready, Qt.QueuedConnection)
         self._refineFailed.connect(self._on_refine_failed, Qt.QueuedConnection)
+        self._itemRefineReady.connect(self._on_item_refine_ready, Qt.QueuedConnection)
+        self._itemRefineFailed.connect(self._on_item_refine_failed, Qt.QueuedConnection)
         self._update_manual = False
 
     # ---- ciclo de vida ----
@@ -326,6 +331,51 @@ class Controller(QObject):
     def _on_refine_ready(self, text: str, duration: float) -> None:
         self.refineBusy.emit(False)
         self._finish_output(text, duration)
+
+    # ---- refinar um item já existente no histórico ----
+    def refine_history_item(self, uid: str) -> None:
+        entry = self.history.by_uid(uid)
+        if entry is None:
+            return
+        if self._refiner is None:
+            self._rebuild_refiner()
+        if self._refiner is None:
+            self.setupNeeded.emit(
+                "Falta a chave do provedor escolhido para refinar o texto."
+            )
+            return
+        self.itemRefineBusy.emit(uid, True)
+        threading.Thread(
+            target=self._item_refine_worker, args=(uid, entry.text), daemon=True
+        ).start()
+
+    def _item_refine_worker(self, uid: str, text: str) -> None:
+        try:
+            context = ""
+            if self.config.context_enabled:
+                from .context import load_context
+
+                context = load_context(self.config.context_dir)
+            refined = self._refiner.refine(
+                text, self.config.refine_prompt, context
+            ).strip()
+            self._itemRefineReady.emit(uid, refined or text)
+        except Exception as e:  # noqa: BLE001
+            self._itemRefineFailed.emit(uid, str(e))
+
+    def _on_item_refine_ready(self, uid: str, text: str) -> None:
+        self.itemRefineBusy.emit(uid, False)
+        entry = self.history.by_uid(uid)
+        if entry is None:
+            return
+        # Guarda o texto original só na primeira vez, para nada se perder.
+        original = entry.original or entry.text
+        self.history.update_text(uid, text, entry.refined + 1, original)
+        self.historyChanged.emit()
+
+    def _on_item_refine_failed(self, uid: str, message: str) -> None:
+        self.itemRefineBusy.emit(uid, False)
+        self.failed.emit(f"Não consegui refinar: {message}")
 
     def _on_refine_failed(self, message: str, raw_text: str, duration: float) -> None:
         self.refineBusy.emit(False)
