@@ -288,9 +288,14 @@ class MainWindow(QMainWindow):
         lay = QVBoxLayout(w)
 
         top = QHBoxLayout()
-        file_btn = QPushButton("🎧 Transcrever arquivo de áudio…")
+        top.setSpacing(10)
+        self.record_btn = QPushButton("🎙️  Iniciar gravação")
+        self.record_btn.setObjectName("Record")
+        self.record_btn.clicked.connect(self.controller.toggle_recording)
+        file_btn = QPushButton("🎧  Transcrever arquivo…")
         file_btn.setObjectName("Primary")
         file_btn.clicked.connect(self._open_audio_file)
+        top.addWidget(self.record_btn)
         top.addWidget(file_btn)
         top.addStretch()
         lay.addLayout(top)
@@ -349,6 +354,12 @@ class MainWindow(QMainWindow):
         self.threshold_spin.setValue(cfg.tap_threshold_ms)
         self.threshold_spin.setSuffix(" ms")
         self.language_edit = QLineEdit(cfg.language)
+        self.theme_combo = QComboBox()
+        self.theme_combo.addItem("Automático (segue o Windows)", "auto")
+        self.theme_combo.addItem("Claro", "light")
+        self.theme_combo.addItem("Escuro", "dark")
+        _ti = self.theme_combo.findData(cfg.theme_mode)
+        self.theme_combo.setCurrentIndex(_ti if _ti >= 0 else 0)
         self.output_combo = QComboBox()
         self.output_combo.addItems(["paste", "clipboard_only"])
         self.output_combo.setCurrentText(cfg.output_mode)
@@ -380,6 +391,7 @@ class MainWindow(QMainWindow):
         form.addRow("Atalho:", self.hotkey_btn)
         form.addRow("Limiar toque/segurar:", self.threshold_spin)
         form.addRow("Idioma:", self.language_edit)
+        form.addRow("Tema:", self.theme_combo)
         form.addRow("Modo de saída:", self.output_combo)
         form.addRow("", self.restore_check)
         form.addRow("", self.ai_note_box)
@@ -398,6 +410,7 @@ class MainWindow(QMainWindow):
             hotkey=self.hotkey_btn.value(),
             tap_threshold_ms=self.threshold_spin.value(),
             language=self.language_edit.text().strip() or "pt",
+            theme_mode=self.theme_combo.currentData(),
             output_mode=self.output_combo.currentText(),
             restore_clipboard=self.restore_check.isChecked(),
             history_size=self.history_spin.value(),
@@ -430,6 +443,14 @@ class MainWindow(QMainWindow):
             "transcribing": "⏳ Transcrevendo…",
         }
         self.statusBar().showMessage(labels.get(state, state))
+        if hasattr(self, "record_btn"):
+            recording = state == "recording"
+            self.record_btn.setText(
+                "⏹  Parar gravação" if recording else "🎙️  Iniciar gravação"
+            )
+            self.record_btn.setProperty("recording", "true" if recording else "false")
+            self.record_btn.style().unpolish(self.record_btn)
+            self.record_btn.style().polish(self.record_btn)
 
     def closeEvent(self, event):  # noqa: N802 — fecha para a bandeja
         event.ignore()

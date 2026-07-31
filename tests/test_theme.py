@@ -1,6 +1,6 @@
 import unittest
 
-from assistente_voz.theme import DARK, LIGHT, build_qss
+from assistente_voz.theme import DARK, LIGHT, build_qss, palette_for
 
 
 class TestTheme(unittest.TestCase):
@@ -24,6 +24,12 @@ class TestTheme(unittest.TestCase):
         qss = build_qss(LIGHT)
         self.assertIn("QPushButton", qss)
         self.assertIn("QTabBar::tab", qss)
+
+    def test_palette_for(self):
+        self.assertIs(palette_for("light", True), LIGHT)
+        self.assertIs(palette_for("dark", False), DARK)
+        self.assertIs(palette_for("auto", True), DARK)    # SO escuro
+        self.assertIs(palette_for("auto", False), LIGHT)  # SO claro
 
 
 if __name__ == "__main__":

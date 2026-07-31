@@ -27,7 +27,7 @@ def main() -> int:
     from .config import config_dir, load_config
     from .history import History
     from .resources import app_icon
-    from .theme import DARK, LIGHT, build_qss
+    from .theme import apply_theme
     from .ui import MainWindow, TrayApp
 
     app = QApplication(sys.argv)
@@ -49,22 +49,6 @@ def main() -> int:
     instance_server = QLocalServer()
     instance_server.listen(ipc_name)
 
-    # Tema automático: segue o claro/escuro do Windows e reage a mudanças.
-    hints = app.styleHints()
-
-    def _apply_theme() -> None:
-        try:
-            dark = hints.colorScheme() == Qt.ColorScheme.Dark
-        except Exception:  # versões antigas do Qt: assume claro
-            dark = False
-        app.setStyleSheet(build_qss(DARK if dark else LIGHT))
-
-    _apply_theme()
-    try:
-        hints.colorSchemeChanged.connect(lambda *_: _apply_theme())
-    except Exception:
-        pass
-
     if not QSystemTrayIcon.isSystemTrayAvailable():
         QMessageBox.critical(None, "Erro", "Bandeja do sistema indisponível.")
         return 1
@@ -72,6 +56,18 @@ def main() -> int:
     cfg = load_config()
     history = History(config_dir() / "history.json", max_size=cfg.history_size)
     controller = Controller(cfg, history)
+
+    # Tema: aplica conforme o modo (auto/claro/escuro) e reage a mudanças.
+    def _apply_theme() -> None:
+        apply_theme(app, controller.config.theme_mode)
+
+    _apply_theme()
+    try:
+        app.styleHints().colorSchemeChanged.connect(lambda *_: _apply_theme())
+    except Exception:
+        pass
+    controller.configApplied.connect(_apply_theme)
+
     window = MainWindow(controller)
     TrayApp(controller, window)
     controller.quitRequested.connect(app.quit)

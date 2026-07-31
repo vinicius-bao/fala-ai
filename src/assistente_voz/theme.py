@@ -65,6 +65,27 @@ DARK = Palette(
 )
 
 
+def palette_for(mode: str, dark_os: bool) -> Palette:
+    """Escolhe a paleta pelo modo ('auto'/'light'/'dark') e pelo tema do SO."""
+    if mode == "dark":
+        return DARK
+    if mode == "light":
+        return LIGHT
+    return DARK if dark_os else LIGHT
+
+
+def apply_theme(app, mode: str) -> None:
+    """Aplica o tema no QApplication conforme o modo escolhido."""
+    from PySide6.QtCore import Qt
+
+    dark_os = False
+    try:
+        dark_os = app.styleHints().colorScheme() == Qt.ColorScheme.Dark
+    except Exception:
+        pass
+    app.setStyleSheet(build_qss(palette_for(mode, dark_os)))
+
+
 def build_qss(p: Palette) -> str:
     """Folha de estilo (QSS) gerada a partir da paleta."""
     grad = (
@@ -87,12 +108,20 @@ def build_qss(p: Palette) -> str:
     QTabBar::tab:hover {{ color: {p.text}; }}
 
     QPushButton {{ background-color: {p.surface}; color: {p.text};
-        border: 1px solid {p.border}; border-radius: 8px; padding: 7px 14px; }}
-    QPushButton:hover {{ border-color: {p.accent}; }}
+        border: 1px solid {p.border}; border-radius: 9px; padding: 9px 16px;
+        min-height: 18px; }}
+    QPushButton:hover {{ border-color: {p.accent}; background-color: {p.surface_alt}; }}
     QPushButton:pressed {{ background-color: {p.surface_alt}; }}
-    QPushButton#Primary {{ border: none; color: #FFFFFF; border-radius: 8px;
-        padding: 8px 16px; background-color: {grad}; }}
+    QPushButton#Primary {{ border: none; color: #FFFFFF; border-radius: 9px;
+        padding: 10px 18px; min-height: 18px; font-weight: 500;
+        background-color: {grad}; }}
     QPushButton#Primary:hover {{ background-color: {p.accent_hover}; }}
+    QPushButton#Record {{ border: none; color: #FFFFFF; border-radius: 9px;
+        padding: 10px 18px; min-height: 18px; font-weight: 500;
+        background-color: {grad}; }}
+    QPushButton#Record:hover {{ background-color: {p.accent_hover}; }}
+    QPushButton#Record[recording="true"] {{ background-color: {p.danger}; }}
+    QPushButton#Record[recording="true"]:hover {{ background-color: {p.danger}; }}
 
     QLineEdit, QPlainTextEdit, QSpinBox, QComboBox {{
         background-color: {p.surface}; color: {p.text};
@@ -117,10 +146,14 @@ def build_qss(p: Palette) -> str:
     QMenu::item {{ padding: 6px 22px; border-radius: 6px; }}
     QMenu::item:selected {{ background-color: {p.accent}; color: {p.accent_text}; }}
 
-    QScrollBar:vertical {{ background: transparent; width: 10px; margin: 2px; }}
-    QScrollBar::handle:vertical {{ background: {p.border}; border-radius: 5px;
-        min-height: 24px; }}
+    QScrollBar:vertical {{ background: transparent; width: 12px; margin: 0; }}
+    QScrollBar::handle:vertical {{ background: {p.border}; border-radius: 6px;
+        min-height: 28px; margin: 2px; }}
     QScrollBar::handle:vertical:hover {{ background: {p.text_muted}; }}
-    QScrollBar::add-line, QScrollBar::sub-line {{ height: 0; }}
+    QScrollBar:horizontal {{ background: transparent; height: 12px; margin: 0; }}
+    QScrollBar::handle:horizontal {{ background: {p.border}; border-radius: 6px;
+        min-width: 28px; margin: 2px; }}
+    QScrollBar::handle:horizontal:hover {{ background: {p.text_muted}; }}
+    QScrollBar::add-line, QScrollBar::sub-line {{ width: 0; height: 0; }}
     QScrollBar::add-page, QScrollBar::sub-page {{ background: transparent; }}
     """

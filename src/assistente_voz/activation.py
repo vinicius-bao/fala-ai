@@ -54,6 +54,17 @@ class Activation:
             return Action.STOP_AND_TRANSCRIBE
         return Action.NONE
 
+    def toggle_button(self) -> Action:
+        """Aciona início/parada por clique de botão (comporta como toggle)."""
+        if self.state is State.IDLE:
+            self.state = State.RECORDING
+            self._toggle = True
+            return Action.START_RECORDING
+        if self.state is State.RECORDING:
+            self.state = State.TRANSCRIBING
+            return Action.STOP_AND_TRANSCRIBE
+        return Action.NONE
+
     def on_transcription_done(self) -> None:
         self.state = State.IDLE
         self._toggle = False

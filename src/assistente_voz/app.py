@@ -33,6 +33,7 @@ class Controller(QObject):
     updateStatus = Signal(str)          # mensagens de progresso da atualização
     updateError = Signal(str)
     quitRequested = Signal()            # pedir encerramento (ex.: após abrir instalador)
+    configApplied = Signal()           # configurações aplicadas (ex.: reaplicar tema)
 
     # internos: trazem eventos de outras threads para a thread do Qt
     _hkStart = Signal()
@@ -97,6 +98,11 @@ class Controller(QObject):
                 self._hotkey.set_hotkey(new.hotkey)
             except Exception as e:  # noqa: BLE001
                 self.failed.emit(f"Atalho inválido: {e}")
+        self.configApplied.emit()
+
+    def toggle_recording(self) -> None:
+        """Inicia/para a gravação pelo botão da interface (comporta como toggle)."""
+        self._run_action(self._activation.toggle_button())
 
     def _rebuild_engine(self) -> None:
         key = resolve_api_key(self.config)

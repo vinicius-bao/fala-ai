@@ -38,6 +38,16 @@ class TestActivation(unittest.TestCase):
         a.on_press()
         self.assertEqual(a.on_release(400), Action.STOP_AND_TRANSCRIBE)  # >= limiar
 
+    def test_toggle_button(self):
+        a = Activation()
+        self.assertEqual(a.toggle_button(), Action.START_RECORDING)
+        self.assertEqual(a.state, State.RECORDING)
+        self.assertEqual(a.toggle_button(), Action.STOP_AND_TRANSCRIBE)
+        self.assertEqual(a.state, State.TRANSCRIBING)
+        self.assertEqual(a.toggle_button(), Action.NONE)  # transcrevendo: ignora
+        a.on_transcription_done()
+        self.assertEqual(a.state, State.IDLE)
+
 
 if __name__ == "__main__":
     unittest.main()
