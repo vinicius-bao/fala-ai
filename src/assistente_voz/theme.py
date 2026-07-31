@@ -84,18 +84,21 @@ def apply_theme(app, mode: str) -> None:
     except Exception:
         pass
     pal = palette_for(mode, dark_os)
-    down = up = ""
+    down = up = check = ""
     try:
-        from .resources import chevron_png
+        from .resources import chevron_png, icon_png
 
         down = chevron_png(pal.text_muted, up=False)
         up = chevron_png(pal.text_muted, up=True)
-    except Exception:  # sem cache gravável: usa as setas padrão do Qt
+        check = icon_png("check", pal.accent_text, 14)
+    except Exception:  # sem cache gravável: usa os padrões do Qt
         pass
-    app.setStyleSheet(build_qss(pal, down, up))
+    app.setStyleSheet(build_qss(pal, down, up, check))
 
 
-def build_qss(p: Palette, chevron_down: str = "", chevron_up: str = "") -> str:
+def build_qss(
+    p: Palette, chevron_down: str = "", chevron_up: str = "", check: str = ""
+) -> str:
     """Folha de estilo (QSS) gerada a partir da paleta.
 
     ``chevron_*`` são caminhos de PNG para as setas de QComboBox/QSpinBox; se
@@ -118,6 +121,7 @@ def build_qss(p: Palette, chevron_down: str = "", chevron_up: str = "") -> str:
             f"QSpinBox::up-arrow {{ image: url({chevron_up}); "
             "width: 12px; height: 8px; }\n"
         )
+    check_rule = f"image: url({check});" if check else ""
     return f"""
     * {{ outline: none; }}
     QWidget {{ background-color: {p.bg}; color: {p.text}; font-size: 13px; }}
@@ -195,7 +199,12 @@ def build_qss(p: Palette, chevron_down: str = "", chevron_up: str = "") -> str:
     QListWidget::item:selected {{ background-color: {p.accent}; color: {p.accent_text}; }}
     QListWidget::item:hover {{ background-color: {p.surface_alt}; }}
 
-    QCheckBox {{ color: {p.text}; spacing: 8px; }}
+    QCheckBox {{ color: {p.text}; spacing: 9px; }}
+    QCheckBox::indicator {{ width: 16px; height: 16px; border-radius: 5px;
+        border: 1px solid {p.border}; background-color: {p.surface_alt}; }}
+    QCheckBox::indicator:hover {{ border-color: {p.accent}; }}
+    QCheckBox::indicator:checked {{ background-color: {p.accent};
+        border-color: {p.accent}; {check_rule} }}
     QLabel {{ background: transparent; color: {p.text}; }}
     QStatusBar {{ background-color: {p.surface}; color: {p.text_muted};
         border-top: 1px solid {p.border}; }}

@@ -327,3 +327,14 @@ principalmente **mensagens de voz do WhatsApp**.
   `min-height` do QSS global sobrepõe `setFixedSize`.
 - **Conferência visual:** `tools/render_ui.py` renderiza a interface em PNG em
   modo headless (`QT_QPA_PLATFORM=offscreen`), sem precisar abrir o app.
+
+## 24. Adendo — Salvamento ao vivo, versão clicável e roda do mouse
+
+- **Sem botão Salvar:** toda alteração é gravada sozinha. `_connect_autosave`
+  liga os campos a `_queue_save`, que agenda `_save_settings` com debounce de
+  600 ms (QLineEdit salva em `editingFinished`, para não gravar meia palavra).
+  `_flush_save` grava o que estiver pendente ao fechar a janela. Atalho inválido
+  avisa na barra de status, sem modal.
+- **Pílula de versão é um botão:** clicar consulta atualizações (`check_updates`).
+- **Roda do mouse:** `NoScrollComboBox`/`NoScrollSpinBox` ignoram o `wheelEvent`,
+  para rolar a página não trocar a opção selecionada. Só teclado, setas e clique.

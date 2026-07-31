@@ -103,6 +103,28 @@ def chevron_png(color: str, up: bool = False) -> str:
     return out.as_posix()
 
 
+def icon_png(name: str, color: str, size: int = 14) -> str:
+    """Renderiza (e cacheia) um ícone em PNG para usar no QSS."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QColor, QPainter, QPixmap
+
+    from . import icons
+    from .config import config_dir
+
+    cache = config_dir() / "cache"
+    cache.mkdir(parents=True, exist_ok=True)
+    out = cache / f"{name}_{size}_{color.lstrip('#')}.png"
+    if not out.exists():
+        pm = QPixmap(size, size)
+        pm.fill(Qt.transparent)
+        p = QPainter(pm)
+        p.setRenderHint(QPainter.Antialiasing)
+        icons.draw(name, p, float(size), QColor(color))
+        p.end()
+        pm.save(str(out), "PNG")
+    return out.as_posix()
+
+
 def app_icon():
     from PySide6.QtGui import QIcon
 

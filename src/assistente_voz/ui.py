@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QRectF, QSize, Qt, Signal
+from PySide6.QtCore import QRectF, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QColor, QLinearGradient, QPainter
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -72,6 +72,20 @@ def _qt_key_to_token(key: int) -> str:
         Qt.Key_PageDown: "page_down",
     }
     return special.get(key, "")
+
+
+class NoScrollComboBox(QComboBox):
+    """Combo que ignora a roda do mouse (evita trocar opção ao rolar a página)."""
+
+    def wheelEvent(self, event):  # noqa: N802
+        event.ignore()
+
+
+class NoScrollSpinBox(QSpinBox):
+    """SpinBox que ignora a roda do mouse (só teclado e setas)."""
+
+    def wheelEvent(self, event):  # noqa: N802
+        event.ignore()
 
 
 class RecordButton(QPushButton):
@@ -199,6 +213,8 @@ class HistoryCard(QFrame):
 class HotkeyCaptureButton(QPushButton):
     """Captura a próxima combinação pressionada e a grava como atalho."""
 
+    changed = Signal(str)
+
     def __init__(self, value: str, parent=None):
         super().__init__(parent)
         self._value = value
@@ -244,6 +260,7 @@ class HotkeyCaptureButton(QPushButton):
         self._capturing = False
         self.releaseKeyboard()
         self._refresh()
+        self.changed.emit(self._value)
 
 
 class TranscriptionResultDialog(QDialog):
@@ -335,6 +352,10 @@ class MainWindow(QMainWindow):
         self.setWindowIcon(app_icon())
         self.resize(620, 640)
         self.setAcceptDrops(True)
+        self._loading = True
+        self._save_timer = QTimer(self)
+        self._save_timer.setSingleShot(True)
+        self._save_timer.timeout.connect(self._save_settings)
 
         tabs = QTabWidget()
         tabs.addTab(self._history_tab(), "Histórico")
@@ -395,8 +416,11 @@ class MainWindow(QMainWindow):
         title.setObjectName("HeaderTitle")
         from . import __version__
 
-        version = QLabel(f"v{__version__}")
+        version = QPushButton(f"v{__version__}")
         version.setObjectName("VersionPill")
+        version.setCursor(Qt.PointingHandCursor)
+        version.setToolTip("Clique para verificar se há atualização")
+        version.clicked.connect(lambda: self.controller.check_updates(manual=True))
         lay.addWidget(logo)
         lay.addWidget(title)
         lay.addStretch()
@@ -559,6 +583,7 @@ class MainWindow(QMainWindow):
     # ----- aba Configurações -----
     def _settings_tab(self) -> QWidget:
         cfg = self.controller.config
+        self._loading = True  # evita salvar enquanto os campos são preenchidos
         page = QWidget()
         col = QVBoxLayout(page)
         col.setContentsMargins(16, 14, 16, 14)
@@ -567,7 +592,7 @@ class MainWindow(QMainWindow):
         # --- Gravação ---
         card, form = _section("Gravação")
         self.hotkey_btn = HotkeyCaptureButton(cfg.hotkey)
-        self.threshold_spin = QSpinBox()
+        self.threshold_spin = NoScrollSpinBox()
         self.threshold_spin.setRange(100, 2000)
         self.threshold_spin.setSingleStep(50)
         self.threshold_spin.setValue(cfg.tap_threshold_ms)
@@ -580,7 +605,7 @@ class MainWindow(QMainWindow):
 
         # --- Aparência ---
         card, form = _section("Aparência")
-        self.theme_combo = QComboBox()
+        self.theme_combo = NoScrollComboBox()
         self.theme_combo.addItem("Automático (segue o Windows)", "auto")
         self.theme_combo.addItem("Claro", "light")
         self.theme_combo.addItem("Escuro", "dark")
@@ -591,7 +616,7 @@ class MainWindow(QMainWindow):
 
         # --- Saída do texto ---
         card, form = _section("Saída do texto")
-        self.output_combo = QComboBox()
+        self.output_combo = NoScrollComboBox()
         self.output_combo.addItem("Colar onde o cursor estiver", "paste")
         self.output_combo.addItem("Somente copiar", "clipboard_only")
         _oi = self.output_combo.findData(cfg.output_mode)
@@ -602,7 +627,7 @@ class MainWindow(QMainWindow):
         self.ai_note_box.setChecked(cfg.ai_note_enabled)
         self.ai_note_edit = QLineEdit(cfg.ai_note_text)
         self.ai_note_edit.setPlaceholderText(AI_NOTE)
-        self.history_spin = QSpinBox()
+        self.history_spin = NoScrollSpinBox()
         self.history_spin.setRange(1, 1000)
         self.history_spin.setValue(cfg.history_size)
         self.autostart_check = QCheckBox("Iniciar com o Windows")
@@ -628,7 +653,7 @@ class MainWindow(QMainWindow):
             "gemini": cfg.gemini_model,
         }
         self._cur_provider = cfg.provider if cfg.provider in PROVIDERS else "groq"
-        self.provider_combo = QComboBox()
+        self.provider_combo = NoScrollComboBox()
         for _p in PROVIDERS:
             self.provider_combo.addItem(PROVIDER_LABELS[_p], _p)
         _pi = self.provider_combo.findData(self._cur_provider)
@@ -657,7 +682,7 @@ class MainWindow(QMainWindow):
         # --- Refinamento ---
         card, form = _section("Refinamento (2º atalho)")
         self.refine_hotkey_btn = HotkeyCaptureButton(cfg.refine_hotkey)
-        self.refiner_combo = QComboBox()
+        self.refiner_combo = NoScrollComboBox()
         for _rp in PROVIDERS:
             self.refiner_combo.addItem(PROVIDER_LABELS[_rp], _rp)
         _ri = self.refiner_combo.findData(cfg.refiner_provider)
@@ -666,7 +691,7 @@ class MainWindow(QMainWindow):
             cfg.refiner_model or DEFAULT_CHAT_MODELS.get(cfg.refiner_provider, "")
         )
         self.refiner_combo.currentIndexChanged.connect(self._on_refiner_changed)
-        self.refine_preset_combo = QComboBox()
+        self.refine_preset_combo = NoScrollComboBox()
         for _k, (_lbl, _txt) in REFINE_PRESETS.items():
             self.refine_preset_combo.addItem(_lbl, _k)
         self.refine_preset_combo.addItem("Personalizado", "custom")
@@ -717,15 +742,14 @@ class MainWindow(QMainWindow):
         form.addRow("", check_now_btn)
         col.addWidget(card)
 
-        save_row = QHBoxLayout()
-        save_row.addStretch()
-        save_btn = QPushButton("Salvar alterações")
-        save_btn.setObjectName("Primary")
-        save_btn.setCursor(Qt.PointingHandCursor)
-        save_btn.clicked.connect(self._save_settings)
-        save_row.addWidget(save_btn)
-        col.addLayout(save_row)
+        note = QLabel("As alterações são salvas automaticamente.")
+        note.setObjectName("Muted")
+        note.setAlignment(Qt.AlignHCenter)
+        col.addWidget(note)
         col.addStretch()
+
+        self._connect_autosave()
+        self._loading = False
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -741,6 +765,52 @@ class MainWindow(QMainWindow):
         self._cur_provider = p
         self.model_edit.setText(self._prov_models.get(p) or DEFAULT_MODELS[p])
         self.apikey_edit.setText(self._prov_keys.get(p, ""))
+
+    # ----- salvamento ao vivo -----
+    def _connect_autosave(self) -> None:
+        """Liga todos os campos ao salvamento automático (com debounce)."""
+        for w in (self.hotkey_btn, self.refine_hotkey_btn):
+            w.changed.connect(self._queue_save)
+        for w in (self.threshold_spin, self.history_spin):
+            w.valueChanged.connect(self._queue_save)
+        for w in (
+            self.theme_combo,
+            self.output_combo,
+            self.provider_combo,
+            self.refiner_combo,
+            self.refine_preset_combo,
+        ):
+            w.currentIndexChanged.connect(self._queue_save)
+        for w in (
+            self.restore_check,
+            self.ai_note_box,
+            self.autostart_check,
+            self.context_box,
+            self.update_check_box,
+        ):
+            w.toggled.connect(self._queue_save)
+        # Campos de texto: salva ao sair do campo (evita gravar meia palavra).
+        for w in (
+            self.language_edit,
+            self.ai_note_edit,
+            self.model_edit,
+            self.apikey_edit,
+            self.hint_edit,
+            self.refiner_model_edit,
+            self.context_dir_edit,
+        ):
+            w.editingFinished.connect(self._queue_save)
+        self.refine_prompt_edit.textChanged.connect(self._queue_save)
+
+    def _queue_save(self, *_args) -> None:
+        if getattr(self, "_loading", False):
+            return
+        self._save_timer.start(600)
+
+    def _flush_save(self) -> None:
+        if self._save_timer.isActive():
+            self._save_timer.stop()
+            self._save_settings()
 
     def _on_preset_changed(self) -> None:
         key = self.refine_preset_combo.currentData()
@@ -789,17 +859,15 @@ class MainWindow(QMainWindow):
             ai_note_enabled=self.ai_note_box.isChecked(),
             ai_note_text=self.ai_note_edit.text().strip() or AI_NOTE,
         )
+        # Atalho inválido: avisa na barra de status e não grava (sem modal, já
+        # que o salvamento agora é automático).
         try:
             parse_hotkey(cfg.hotkey)
-        except ValueError as e:
-            QMessageBox.warning(self, "Atalho inválido", str(e))
-            return
-        if cfg.refine_hotkey:
-            try:
+            if cfg.refine_hotkey:
                 parse_hotkey(cfg.refine_hotkey)
-            except ValueError as e:
-                QMessageBox.warning(self, "Atalho de refino inválido", str(e))
-                return
+        except ValueError as e:
+            self.statusBar().showMessage(f"Atalho inválido: {e}", 6000)
+            return
         save_config(cfg)
         self.controller.apply_config(cfg)
         try:
@@ -810,7 +878,7 @@ class MainWindow(QMainWindow):
             pass
         self._refresh_hint()
         self.refresh_history()
-        self.statusBar().showMessage("Configurações salvas.", 3000)
+        self.statusBar().showMessage("Salvo ✓", 2000)
 
     def _on_state(self, state: str) -> None:
         labels = {
@@ -823,6 +891,7 @@ class MainWindow(QMainWindow):
             self.record_btn.set_recording(state == "recording")
 
     def closeEvent(self, event):  # noqa: N802 — fecha para a bandeja
+        self._flush_save()  # não perde edição pendente ao fechar
         event.ignore()
         self.hide()
         self.minimizedToTray.emit()
