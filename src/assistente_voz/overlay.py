@@ -66,29 +66,32 @@ class _WaveBars(QWidget):
     def __init__(self, n: int = 21, parent=None):
         super().__init__(parent)
         self._n = n
-        self._shown = [0.10] * n   # o que está desenhado (suavizado)
-        self._target = [0.10] * n  # para onde cada barra está indo
+        self._levels = [0.06] * n   # histórico rolante do que foi falado
+        self._smooth = 0.06         # nível suavizado no tempo
         self._phase = 0.0
         self.setFixedSize(n * 7, 30)
         self.setAttribute(Qt.WA_TransparentForMouseEvents)
 
     def reset(self) -> None:
-        self._shown = [0.10] * self._n
-        self._target = [0.10] * self._n
-        self.update()
+        self._levels = [0.06] * self._n
+        self._smooth = 0.06
+        self._repaint()
 
     def push(self, level: float) -> None:
-        """Entra um novo nível; as barras rolam e suavizam até ele."""
-        level = max(0.08, min(1.0, level))
-        self._phase += 0.55
-        self._target = self._target[1:] + [level]
-        for i, t in enumerate(self._target):
-            # envelope: as pontas ficam menores, dá forma de onda
-            edge = math.sin(math.pi * (i + 0.5) / self._n) ** 0.6
-            wobble = 0.85 + 0.15 * math.sin(self._phase + i * 0.7)
-            goal = max(0.08, t * edge * wobble)
-            self._shown[i] += (goal - self._shown[i]) * 0.45
-        self.update()
+        """Entra um novo nível: rola o histórico e repinta."""
+        level = max(0.0, min(1.0, level))
+        # sobe rápido (acompanha a voz) e desce mais devagar (fica fluido)
+        k = 0.6 if level > self._smooth else 0.25
+        self._smooth += (level - self._smooth) * k
+        self._phase += 0.5
+        self._levels = self._levels[1:] + [self._smooth]
+        self._repaint()
+
+    def _repaint(self) -> None:
+        # Em janela translúcida, repintar só o filho pode não recompor na tela
+        # (o Windows mantém o quadro anterior) — repintamos o balão inteiro.
+        win = self.window()
+        (win if win is not None else self).update()
 
     def paintEvent(self, event):  # noqa: N802
         p = QPainter(self)
@@ -97,8 +100,9 @@ class _WaveBars(QWidget):
         slot = self.width() / self._n
         barw = slot * 0.44
         h_max = float(self.height())
-        for i, lv in enumerate(self._shown):
-            h = max(3.0, lv * h_max)
+        for i, lv in enumerate(self._levels):
+            wobble = 0.9 + 0.1 * math.sin(self._phase + i * 0.8)
+            h = max(3.0, min(h_max, lv * wobble * h_max))
             x = i * slot + (slot - barw) / 2
             y = (h_max - h) / 2
             p.setBrush(_grad_color(i / (self._n - 1)))

@@ -108,6 +108,11 @@ class WelcomeDialog(QDialog):
             _step("3", "Arraste um áudio na janela (ex.: mensagem de voz do "
                        "WhatsApp) para transcrever.")
         )
+        root.addWidget(
+            _step("4", "O app fica na <b>bandeja</b>, perto do relógio. O "
+                       "Windows esconde ícones novos: clique na setinha "
+                       "<b>⌃</b> e arraste o Fala AI para fora.")
+        )
 
         line = QFrame()
         line.setFrameShape(QFrame.HLine)

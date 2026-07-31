@@ -86,7 +86,10 @@ class Recorder:
         step = max(1, len(samples) // 512)  # subamostra p/ custo baixo
         subset = samples[::step]
         rms = math.sqrt(sum(v * v for v in subset) / len(subset))
-        return min(1.0, rms / 6000.0)
+        # Curva perceptual: fala normal precisa ocupar boa parte da onda, não
+        # só 30% dela. O expoente < 1 levanta os níveis baixos.
+        norm = (rms / 32768.0) * 10.0
+        return max(0.0, min(1.0, norm**0.7))
 
     def stop(self) -> bytes:
         if self._stream is None:
