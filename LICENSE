@@ -1,0 +1,76 @@
+# Licença de Uso — Fala AI
+
+Copyright (c) 2026 Vinícius Bao. Todos os direitos reservados.
+
+O código-fonte deste projeto é **visível publicamente (source-available)**, mas
+este **não** é um software livre nem open source. O uso é regido por este
+documento.
+
+## 1. Permissão concedida
+
+Você pode, gratuitamente:
+
+- baixar, instalar e usar o Fala AI para fins **pessoais** ou para o seu
+  **próprio trabalho**, em quantos computadores quiser;
+- ler o código-fonte e compilá-lo para uso próprio;
+- fazer modificações locais para uso próprio.
+
+## 2. Restrições
+
+Sem autorização prévia e por escrito do autor, você **não** pode:
+
+- redistribuir, publicar, vender, alugar, sublicenciar ou hospedar cópias do
+  software — originais ou modificadas;
+- oferecer o software, no todo ou em parte, como produto ou serviço a
+  terceiros;
+- remover ou alterar avisos de copyright, o nome ou a identidade visual do
+  projeto.
+
+## 3. Marca
+
+O nome "Fala AI" e o logotipo pertencem ao autor e **não** são licenciados por
+este documento.
+
+## 4. Componentes de terceiros
+
+Este software utiliza bibliotecas de terceiros, cada uma com sua própria
+licença — algumas delas exigem condições específicas na distribuição. Consulte
+[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). Para esses componentes,
+prevalecem as licenças originais, não este documento.
+
+## 5. Serviços externos
+
+O Fala AI envia áudio para serviços de terceiros (Groq, OpenAI ou Google
+Gemini), conforme a configuração de cada usuário, usando uma chave de API que o
+próprio usuário fornece. O uso desses serviços é regido pelos termos e pela
+política de privacidade de cada provedor. O autor não se responsabiliza pelo
+tratamento dos dados por esses terceiros nem por custos gerados neles.
+
+## 6. Ausência de garantia
+
+O SOFTWARE É FORNECIDO "COMO ESTÁ", SEM GARANTIA DE QUALQUER NATUREZA, EXPRESSA
+OU IMPLÍCITA, INCLUINDO, MAS NÃO SE LIMITANDO A, GARANTIAS DE COMERCIALIZAÇÃO,
+ADEQUAÇÃO A UMA FINALIDADE ESPECÍFICA E NÃO VIOLAÇÃO. EM NENHUMA HIPÓTESE O
+AUTOR SERÁ RESPONSÁVEL POR QUALQUER REIVINDICAÇÃO, DANO OU OUTRA
+RESPONSABILIDADE, SEJA EM AÇÃO CONTRATUAL, EXTRACONTRATUAL OU DE OUTRA FORMA,
+DECORRENTE DO SOFTWARE OU DE SEU USO.
+
+## 7. Permissões adicionais
+
+Para qualquer uso não previsto acima — inclusive redistribuição ou uso
+comercial — entre em contato com o autor pelo GitHub:
+https://github.com/vinicius-bao
+
+---
+
+**Resumo (não substitui o texto acima):** pode usar à vontade, inclusive no
+trabalho; não pode redistribuir nem transformar em produto de terceiros.
+
+---
+
+*English summary: source-available, all rights reserved. You may download,
+install and use Fala AI free of charge for personal or internal use, and read
+or build the source for your own use. Redistribution, sublicensing, and
+offering it as a product or service to third parties are not permitted without
+the author's written consent. Third-party components keep their own licenses
+(see THIRD-PARTY-NOTICES.md). Provided "as is", without warranty of any kind.*

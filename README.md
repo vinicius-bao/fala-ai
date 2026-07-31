@@ -194,3 +194,13 @@ src/assistente_voz/
 ```
 
 Documento de design: [`docs/superpowers/specs`](docs/superpowers/specs/).
+
+## Licença
+
+O Fala AI é **gratuito para baixar, instalar e usar** — inclusive no trabalho —
+mas **não** é open source: o código é apenas visível (*source-available*) e a
+redistribuição depende de autorização. Veja [LICENSE](LICENSE).
+
+As bibliotecas de terceiros mantêm suas próprias licenças (Qt/PySide6 e pynput
+sob LGPL-3.0, entre outras) — veja
+[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).

@@ -37,6 +37,9 @@ Name: "startup"; Description: "Iniciar o Fala AI junto com o Windows"; GroupDesc
 
 [Files]
 Source: "dist\FalaAI\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
+; Licença do app e avisos de terceiros (exigido pela LGPL do Qt/pynput)
+Source: "LICENSE"; DestDir: "{app}"; DestName: "LICENCA.txt"; Flags: ignoreversion
+Source: "THIRD-PARTY-NOTICES.md"; DestDir: "{app}"; DestName: "AVISOS-DE-TERCEIROS.txt"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\Fala AI"; Filename: "{app}\{#AppExe}"
