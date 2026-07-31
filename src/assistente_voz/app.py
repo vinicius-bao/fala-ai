@@ -154,6 +154,20 @@ class Controller(QObject):
             self._pending_refine = False
         self._run_action(self._activation.toggle_button())
 
+    def stop_recording(self) -> None:
+        """Para e transcreve (botão do pop-up)."""
+        if self._activation.state is State.RECORDING:
+            self._run_action(self._activation.toggle_button())
+
+    def cancel_recording(self) -> None:
+        """Descarta a gravação em andamento, sem transcrever."""
+        if self._recorder.is_recording:
+            self._recorder.stop()
+        self._activation.reset()
+        self._pending_refine = False
+        self.overlayState.emit("hidden", "")
+        self._emit_state()
+
     def current_level(self) -> float:
         """Nível atual do microfone (0..1), para a onda do pop-up."""
         return getattr(self._recorder, "level", 0.0)

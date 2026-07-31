@@ -82,6 +82,8 @@ def main() -> int:
     controller.quitRequested.connect(app.quit)
 
     overlay = RecordingOverlay(controller.current_level)
+    overlay.stopRequested.connect(controller.stop_recording)
+    overlay.cancelRequested.connect(controller.cancel_recording)
 
     def _on_overlay(state: str, text: str) -> None:
         if state == "recording":

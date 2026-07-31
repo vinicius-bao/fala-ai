@@ -26,22 +26,29 @@ def logo_pixmap(size: int = 64):
     from PySide6.QtCore import Qt
     from PySide6.QtGui import QPainter, QPixmap
 
+    from .icons import _dpr
+
+    dpr = _dpr()
+    phys = int(size * dpr)  # renderiza no tamanho real da tela (evita borrão)
+
     png = asset_path("logo.png")
     if png.is_file():
         pm = QPixmap(str(png))
         if not pm.isNull():
-            return pm.scaled(
-                size, size, Qt.KeepAspectRatio, Qt.SmoothTransformation
-            )
+            pm = pm.scaled(phys, phys, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            pm.setDevicePixelRatio(dpr)
+            return pm
 
     svg = asset_path("logo.svg")
     if svg.is_file():
         try:
             from PySide6.QtSvg import QSvgRenderer
 
-            pm = QPixmap(size, size)
+            pm = QPixmap(phys, phys)
             pm.fill(Qt.transparent)
+            pm.setDevicePixelRatio(dpr)
             painter = QPainter(pm)
+            painter.setRenderHint(QPainter.Antialiasing)
             QSvgRenderer(str(svg)).render(painter)
             painter.end()
             return pm

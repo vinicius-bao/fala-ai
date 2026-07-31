@@ -101,7 +101,15 @@ def _check(p: QPainter, s: float, c: QColor) -> None:
     p.drawLine(QPointF(s * 0.43, s * 0.71), QPointF(s * 0.77, s * 0.31))
 
 
+def _close(p: QPainter, s: float, c: QColor) -> None:
+    p.setBrush(Qt.NoBrush)
+    p.setPen(QPen(c, s * 0.12, Qt.SolidLine, Qt.RoundCap))
+    p.drawLine(QPointF(s * 0.3, s * 0.3), QPointF(s * 0.7, s * 0.7))
+    p.drawLine(QPointF(s * 0.7, s * 0.3), QPointF(s * 0.3, s * 0.7))
+
+
 _DRAWERS = {
+    "close": _close,
     "check": _check,
     "mic": _mic,
     "stop": _stop,
@@ -119,11 +127,25 @@ def draw(name: str, painter: QPainter, size: float, color: QColor) -> None:
         fn(painter, size, color)
 
 
+def _dpr() -> float:
+    """Escala da tela (125%, 150%…). Sem isso o ícone sai borrado."""
+    from PySide6.QtWidgets import QApplication
+
+    app = QApplication.instance()
+    try:
+        return float(app.devicePixelRatio()) if app else 1.0
+    except Exception:
+        return 1.0
+
+
 def pixmap(name: str, size: int = 20, color: str = "#FFFFFF") -> QPixmap:
-    pm = QPixmap(size, size)
+    dpr = _dpr()
+    pm = QPixmap(int(size * dpr), int(size * dpr))
     pm.fill(Qt.transparent)
+    pm.setDevicePixelRatio(dpr)
     p = QPainter(pm)
     p.setRenderHint(QPainter.Antialiasing)
+    p.scale(dpr, dpr)  # o Qt não escala sozinho ao pintar em QPixmap
     draw(name, p, float(size), QColor(color))
     p.end()
     return pm
