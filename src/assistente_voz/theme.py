@@ -123,6 +123,15 @@ def build_qss(p: Palette) -> str:
     QPushButton#Record[recording="true"] {{ background-color: {p.danger}; }}
     QPushButton#Record[recording="true"]:hover {{ background-color: {p.danger}; }}
 
+    #Hero {{ background: transparent; }}
+    #VersionPill {{ color: {p.text_muted}; background: {p.surface_alt};
+        border: 1px solid {p.border}; border-radius: 11px; padding: 3px 10px;
+        font-size: 11px; }}
+    QPushButton#RecordBig {{ border: none; border-radius: 38px; color: #FFFFFF;
+        font-size: 30px; background-color: {grad}; }}
+    QPushButton#RecordBig:hover {{ background-color: {p.accent_hover}; }}
+    QPushButton#RecordBig[recording="true"] {{ background-color: {p.danger}; }}
+
     QLineEdit, QPlainTextEdit, QSpinBox, QComboBox {{
         background-color: {p.surface}; color: {p.text};
         border: 1px solid {p.border}; border-radius: 8px; padding: 6px 8px;

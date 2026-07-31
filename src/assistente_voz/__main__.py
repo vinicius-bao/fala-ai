@@ -26,6 +26,7 @@ def main() -> int:
     from .app import Controller
     from .config import config_dir, load_config
     from .history import History
+    from .overlay import RecordingOverlay
     from .resources import app_icon
     from .theme import apply_theme
     from .ui import MainWindow, TrayApp
@@ -71,6 +72,20 @@ def main() -> int:
     window = MainWindow(controller)
     TrayApp(controller, window)
     controller.quitRequested.connect(app.quit)
+
+    overlay = RecordingOverlay(controller.current_level)
+
+    def _on_overlay(state: str, text: str) -> None:
+        if state == "recording":
+            overlay.show_recording()
+        elif state == "processing":
+            overlay.show_processing(text or "Transcrevendo…")
+        elif state == "done":
+            overlay.show_done(text or "Colado ✓")
+        else:
+            overlay.hide_overlay()
+
+    controller.overlayState.connect(_on_overlay)
 
     def _activate_window() -> None:
         conn = instance_server.nextPendingConnection()

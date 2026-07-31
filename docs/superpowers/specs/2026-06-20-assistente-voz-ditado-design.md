@@ -312,3 +312,13 @@ principalmente **mensagens de voz do WhatsApp**.
   `context.load_context` lê `.md`/`.txt` (com limite de tamanho) e injeta como
   referência no prompt do refino, para o modelo corrigir *entendendo* o assunto.
   RAG por embeddings fica como evolução futura.
+
+## 23. Adendo — Redesign e pop-up flutuante
+
+- **Janela** repaginada: cabeçalho com logo, nome e **badge de versão** (`__version__`);
+  "herói" com botão de gravar grande e circular; abas Histórico/Configurações.
+- **Pop-up flutuante** (`overlay.py`): janela sem borda, translúcida, sempre no
+  topo, no **centro inferior**, que não rouba foco. Estados: gravando (onda de voz
+  reagindo ao nível do microfone) → processando (barra animada) → "Colado ✓"
+  (some sozinho). Dirigido por `Controller.overlayState`; o nível vem de
+  `Recorder.level` (RMS por `array`, sem numpy) via `Controller.current_level`.

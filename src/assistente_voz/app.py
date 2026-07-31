@@ -43,6 +43,7 @@ class Controller(QObject):
     quitRequested = Signal()            # pedir encerramento (ex.: após abrir instalador)
     configApplied = Signal()           # configurações aplicadas (ex.: reaplicar tema)
     refineBusy = Signal(bool)          # refinando a transcrição
+    overlayState = Signal(str, str)    # pop-up: (recording|processing|done|hidden, texto)
 
     # internos: trazem eventos de outras threads para a thread do Qt
     _hkStart = Signal()
@@ -149,6 +150,10 @@ class Controller(QObject):
             self._pending_refine = False
         self._run_action(self._activation.toggle_button())
 
+    def current_level(self) -> float:
+        """Nível atual do microfone (0..1), para a onda do pop-up."""
+        return getattr(self._recorder, "level", 0.0)
+
     def _rebuild_engine(self) -> None:
         provider = self.config.provider
         key = resolve_provider_key(self.config, provider)
@@ -211,20 +216,26 @@ class Controller(QObject):
         except Exception as e:  # noqa: BLE001
             self.failed.emit(f"Não consegui acessar o microfone: {e}")
             self._activation.reset()
+            self.overlayState.emit("hidden", "")
+            return
+        self.overlayState.emit("recording", "")
 
     def _stop_and_transcribe(self) -> None:
         wav = self._recorder.stop()
         duration = self._recorder.last_duration_s
         if duration < 0.3 or not wav:  # silêncio / clique acidental
             self._activation.on_transcription_done()
+            self.overlayState.emit("hidden", "")
             self._emit_state()
             return
         if self._engine is None:
             self._rebuild_engine()
         if self._engine is None:
             self._activation.on_transcription_done()
+            self.overlayState.emit("hidden", "")
             self._emit_state()
             return
+        self.overlayState.emit("processing", "Transcrevendo…")
         threading.Thread(
             target=self._worker, args=(wav, duration), daemon=True
         ).start()
@@ -244,6 +255,7 @@ class Controller(QObject):
             return
         if self._pending_refine and self._refiner is not None:
             self.refineBusy.emit(True)
+            self.overlayState.emit("processing", "Refinando…")
             threading.Thread(
                 target=self._refine_worker, args=(text, duration), daemon=True
             ).start()
@@ -265,6 +277,8 @@ class Controller(QObject):
             restore_clipboard=self.config.restore_clipboard,
         )
         self.transcribed.emit(text)
+        done = "Colado ✓" if self.config.output_mode == "paste" else "Copiado ✓"
+        self.overlayState.emit("done", done)
 
     def _refine_worker(self, text: str, duration: float) -> None:
         try:
@@ -293,6 +307,7 @@ class Controller(QObject):
         self._activation.on_transcription_done()
         path = self._save_failed_audio(wav)
         self.failed.emit(f"Falha na transcrição: {message}\nÁudio salvo em: {path}")
+        self.overlayState.emit("hidden", "")
         self._emit_state()
 
     # ---- transcrição de arquivo de áudio (drag-and-drop / botão) ----

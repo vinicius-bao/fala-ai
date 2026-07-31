@@ -203,6 +203,7 @@ class MainWindow(QMainWindow):
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
         outer.addWidget(self._header())
+        outer.addWidget(self._hero())
         outer.addWidget(tabs)
         self.setCentralWidget(central)
 
@@ -249,10 +250,42 @@ class MainWindow(QMainWindow):
         logo.setPixmap(logo_pixmap(34))
         title = QLabel(APP_NAME)
         title.setObjectName("HeaderTitle")
+        from . import __version__
+
+        version = QLabel(f"v{__version__}")
+        version.setObjectName("VersionPill")
         lay.addWidget(logo)
         lay.addWidget(title)
         lay.addStretch()
+        lay.addWidget(version)
         return h
+
+    def _hero(self) -> QWidget:
+        w = QWidget()
+        w.setObjectName("Hero")
+        v = QVBoxLayout(w)
+        v.setContentsMargins(16, 16, 16, 12)
+        v.setSpacing(8)
+        self.record_btn = QPushButton("🎙️")
+        self.record_btn.setObjectName("RecordBig")
+        self.record_btn.setFixedSize(76, 76)
+        self.record_btn.clicked.connect(self.controller.toggle_recording)
+        v.addWidget(self.record_btn, alignment=Qt.AlignHCenter)
+        hint = QLabel(
+            f"Atalho {self.controller.config.hotkey}  ·  ou clique para gravar"
+        )
+        hint.setObjectName("Muted")
+        hint.setAlignment(Qt.AlignHCenter)
+        v.addWidget(hint)
+        row = QHBoxLayout()
+        row.addStretch()
+        file_btn = QPushButton("🎧  Transcrever arquivo…")
+        file_btn.setObjectName("Primary")
+        file_btn.clicked.connect(self._open_audio_file)
+        row.addWidget(file_btn)
+        row.addStretch()
+        v.addLayout(row)
+        return w
 
     # ----- arrastar e soltar arquivos de áudio -----
     def dragEnterEvent(self, event):  # noqa: N802
@@ -302,20 +335,8 @@ class MainWindow(QMainWindow):
         w = QWidget()
         lay = QVBoxLayout(w)
 
-        top = QHBoxLayout()
-        top.setSpacing(10)
-        self.record_btn = QPushButton("🎙️  Iniciar gravação")
-        self.record_btn.setObjectName("Record")
-        self.record_btn.clicked.connect(self.controller.toggle_recording)
-        file_btn = QPushButton("🎧  Transcrever arquivo…")
-        file_btn.setObjectName("Primary")
-        file_btn.clicked.connect(self._open_audio_file)
-        top.addWidget(self.record_btn)
-        top.addWidget(file_btn)
-        top.addStretch()
-        lay.addLayout(top)
         hint = QLabel(
-            "Ou arraste um áudio aqui (WhatsApp .opus, .mp3, .m4a, .wav…) "
+            "Arraste um áudio aqui (WhatsApp .opus, .mp3, .m4a, .wav…) "
             "para transcrever."
         )
         hint.setObjectName("Muted")
@@ -556,9 +577,7 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(labels.get(state, state))
         if hasattr(self, "record_btn"):
             recording = state == "recording"
-            self.record_btn.setText(
-                "⏹  Parar gravação" if recording else "🎙️  Iniciar gravação"
-            )
+            self.record_btn.setText("⏹" if recording else "🎙️")
             self.record_btn.setProperty("recording", "true" if recording else "false")
             self.record_btn.style().unpolish(self.record_btn)
             self.record_btn.style().polish(self.record_btn)
