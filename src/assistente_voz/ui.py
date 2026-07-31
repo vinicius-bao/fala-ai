@@ -42,7 +42,9 @@ from .config import (
     DEFAULT_REFINE_PROMPT,
     PROVIDER_LABELS,
     PROVIDERS,
+    REFINE_PRESETS,
     Config,
+    match_preset,
     save_config,
 )
 from .hotkey import parse_hotkey, pretty_hotkey
@@ -638,9 +640,18 @@ class MainWindow(QMainWindow):
         self.apikey_edit.setEchoMode(QLineEdit.Password)
         self.apikey_edit.setPlaceholderText("cole a chave do provedor selecionado")
         self.provider_combo.currentIndexChanged.connect(self._on_provider_changed)
+        self.hint_edit = QLineEdit(cfg.transcribe_hint)
+        self.hint_edit.setPlaceholderText(
+            "ex.: Águia Brindes, Evolution Go, Prisma, funil, romaneio"
+        )
+        self.hint_edit.setToolTip(
+            "Termos e nomes que você usa muito. Ajuda o modelo a não errar a "
+            "grafia (ex.: 'correção' virando 'coleção')."
+        )
         form.addRow("Provedor", self.provider_combo)
         form.addRow("Modelo", self.model_edit)
         form.addRow("Chave (API)", self.apikey_edit)
+        form.addRow("Termos frequentes", self.hint_edit)
         col.addWidget(card)
 
         # --- Refinamento ---
@@ -655,10 +666,18 @@ class MainWindow(QMainWindow):
             cfg.refiner_model or DEFAULT_CHAT_MODELS.get(cfg.refiner_provider, "")
         )
         self.refiner_combo.currentIndexChanged.connect(self._on_refiner_changed)
+        self.refine_preset_combo = QComboBox()
+        for _k, (_lbl, _txt) in REFINE_PRESETS.items():
+            self.refine_preset_combo.addItem(_lbl, _k)
+        self.refine_preset_combo.addItem("Personalizado", "custom")
+        _cur_preset = match_preset(cfg.refine_prompt)
+        _si = self.refine_preset_combo.findData(_cur_preset)
+        self.refine_preset_combo.setCurrentIndex(_si if _si >= 0 else 0)
+        self.refine_preset_combo.currentIndexChanged.connect(self._on_preset_changed)
         self.refine_prompt_edit = QPlainTextEdit(
             cfg.refine_prompt or DEFAULT_REFINE_PROMPT
         )
-        self.refine_prompt_edit.setFixedHeight(88)
+        self.refine_prompt_edit.setFixedHeight(110)
         self.context_box = QCheckBox("Usar pasta de contexto no refinamento")
         self.context_box.setChecked(cfg.context_enabled)
         self.context_dir_edit = QLineEdit(cfg.context_dir)
@@ -679,6 +698,7 @@ class MainWindow(QMainWindow):
         form.addRow("Atalho", self.refine_hotkey_btn)
         form.addRow("Provedor", self.refiner_combo)
         form.addRow("Modelo", self.refiner_model_edit)
+        form.addRow("Estilo", self.refine_preset_combo)
         form.addRow("Prompt", self.refine_prompt_edit)
         form.addRow("", self.context_box)
         form.addRow("Pasta de contexto", context_row)
@@ -722,6 +742,11 @@ class MainWindow(QMainWindow):
         self.model_edit.setText(self._prov_models.get(p) or DEFAULT_MODELS[p])
         self.apikey_edit.setText(self._prov_keys.get(p, ""))
 
+    def _on_preset_changed(self) -> None:
+        key = self.refine_preset_combo.currentData()
+        if key in REFINE_PRESETS:
+            self.refine_prompt_edit.setPlainText(REFINE_PRESETS[key][1])
+
     def _on_refiner_changed(self) -> None:
         p = self.refiner_combo.currentData()
         self.refiner_model_edit.setText(DEFAULT_CHAT_MODELS.get(p, ""))
@@ -756,6 +781,8 @@ class MainWindow(QMainWindow):
             or DEFAULT_CHAT_MODELS.get(self.refiner_combo.currentData(), ""),
             refine_prompt=self.refine_prompt_edit.toPlainText().strip()
             or DEFAULT_REFINE_PROMPT,
+            refine_preset=match_preset(self.refine_prompt_edit.toPlainText()),
+            transcribe_hint=self.hint_edit.text().strip(),
             context_enabled=self.context_box.isChecked(),
             context_dir=self.context_dir_edit.text().strip(),
             check_updates_on_start=self.update_check_box.isChecked(),

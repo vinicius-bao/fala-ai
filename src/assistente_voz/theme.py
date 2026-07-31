@@ -131,7 +131,7 @@ def build_qss(p: Palette, chevron_down: str = "", chevron_up: str = "") -> str:
 
     #Card {{ background-color: {p.surface}; border: 1px solid {p.border};
         border-radius: 12px; }}
-    #Card QLabel {{ background: transparent; }}
+    #Card QLabel, #Card QCheckBox {{ background: transparent; }}
 
     QPushButton#Chip {{ background-color: {p.surface_alt}; color: {p.text};
         border: 1px solid {p.border}; border-radius: 10px; padding: 8px 14px;

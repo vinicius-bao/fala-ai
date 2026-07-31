@@ -8,7 +8,11 @@ from typing import Protocol, runtime_checkable
 @runtime_checkable
 class TranscriptionEngine(Protocol):
     def transcribe(
-        self, audio_bytes: bytes, language: str = "pt", filename: str = "audio.wav"
+        self,
+        audio_bytes: bytes,
+        language: str = "pt",
+        filename: str = "audio.wav",
+        hint: str = "",
     ) -> str: ...
 
 
@@ -24,14 +28,21 @@ class GroqEngine:
         self._model = model
 
     def transcribe(
-        self, audio_bytes: bytes, language: str = "pt", filename: str = "audio.wav"
+        self,
+        audio_bytes: bytes,
+        language: str = "pt",
+        filename: str = "audio.wav",
+        hint: str = "",
     ) -> str:
         # O nome do arquivo informa o formato à Groq (.opus/.ogg/.mp3/.wav...).
+        # `prompt` enviesa o reconhecimento para os termos que costumo usar.
+        extra = {"prompt": hint} if hint else {}
         resp = self._client.audio.transcriptions.create(
             file=(filename, audio_bytes),
             model=self._model,
             language=language,
             response_format="text",
+            **extra,
         )
         # response_format="text" devolve uma string; defensivo de qualquer modo.
         text = resp if isinstance(resp, str) else getattr(resp, "text", str(resp))
@@ -50,13 +61,19 @@ class OpenAIEngine:
         self._model = model
 
     def transcribe(
-        self, audio_bytes: bytes, language: str = "pt", filename: str = "audio.wav"
+        self,
+        audio_bytes: bytes,
+        language: str = "pt",
+        filename: str = "audio.wav",
+        hint: str = "",
     ) -> str:
+        extra = {"prompt": hint} if hint else {}
         resp = self._client.audio.transcriptions.create(
             file=(filename, audio_bytes),
             model=self._model,
             language=language,
             response_format="text",
+            **extra,
         )
         text = resp if isinstance(resp, str) else getattr(resp, "text", str(resp))
         return text.strip()
@@ -78,7 +95,11 @@ class GeminiEngine:
         self._model = model
 
     def transcribe(
-        self, audio_bytes: bytes, language: str = "pt", filename: str = "audio.wav"
+        self,
+        audio_bytes: bytes,
+        language: str = "pt",
+        filename: str = "audio.wav",
+        hint: str = "",
     ) -> str:
         import base64
         import json
@@ -86,6 +107,9 @@ class GeminiEngine:
 
         ext = filename.lower().rsplit(".", 1)[-1]
         mime = _GEMINI_MIME.get(ext, "audio/wav")
+        extra_hint = (
+            f" Termos que costumam aparecer: {hint}." if hint else ""
+        )
         url = (
             f"https://generativelanguage.googleapis.com/v1beta/models/"
             f"{self._model}:generateContent?key={self._key}"
@@ -96,7 +120,8 @@ class GeminiEngine:
                     "parts": [
                         {
                             "text": "Transcreva este áudio em texto, exatamente como "
-                            "falado, sem adicionar nada além da transcrição.",
+                            "falado, sem adicionar nada além da transcrição."
+                            + extra_hint,
                         },
                         {
                             "inline_data": {

@@ -242,7 +242,11 @@ class Controller(QObject):
 
     def _worker(self, wav: bytes, duration: float) -> None:
         try:
-            text = self._engine.transcribe(wav, language=self.config.language)
+            text = self._engine.transcribe(
+                wav,
+                language=self.config.language,
+                hint=self.config.transcribe_hint,
+            )
             self._transcriptionReady.emit(text, duration)
         except Exception as e:  # noqa: BLE001
             self._transcriptionFailed.emit(str(e), wav)
@@ -331,7 +335,10 @@ class Controller(QObject):
     def _file_worker(self, data: bytes, name: str) -> None:
         try:
             text = self._engine.transcribe(
-                data, language=self.config.language, filename=name
+                data,
+                language=self.config.language,
+                filename=name,
+                hint=self.config.transcribe_hint,
             )
             self._fileReady.emit(text, name)
         except Exception as e:  # noqa: BLE001
