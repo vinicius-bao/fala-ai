@@ -45,6 +45,24 @@ jobs:
       - name: PyInstaller
         run: pyinstaller --noconfirm FalaAI.spec
 
+      # Assinatura só acontece se os segredos existirem no repositório.
+      # Sem eles, o build segue normalmente (o app fica sem assinatura).
+      - name: Assinar o executável
+        if: ${{ env.CERT != '' }}
+        env:
+          CERT: ${{ secrets.WINDOWS_CERT_BASE64 }}
+          CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        shell: pwsh
+        run: |
+          [IO.File]::WriteAllBytes("cert.pfx", [Convert]::FromBase64String($env:CERT))
+          $signtool = (Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" `
+            -Recurse -Filter signtool.exe |
+            Where-Object { $_.FullName -like "*x64*" } |
+            Select-Object -First 1).FullName
+          & $signtool sign /f cert.pfx /p $env:CERT_PASSWORD `
+            /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 `
+            "dist\FalaAI\FalaAI.exe"
+
       - name: Instalar Inno Setup
         run: choco install innosetup -y --no-progress
 
@@ -53,6 +71,22 @@ jobs:
         run: |
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" `
             /DAppVersion=${{ steps.ver.outputs.version }} installer.iss
+
+      - name: Assinar o instalador
+        if: ${{ env.CERT != '' }}
+        env:
+          CERT: ${{ secrets.WINDOWS_CERT_BASE64 }}
+          CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        shell: pwsh
+        run: |
+          $signtool = (Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" `
+            -Recurse -Filter signtool.exe |
+            Where-Object { $_.FullName -like "*x64*" } |
+            Select-Object -First 1).FullName
+          & $signtool sign /f cert.pfx /p $env:CERT_PASSWORD `
+            /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 `
+            "installer\FalaAI-Setup.exe"
+          Remove-Item cert.pfx -Force
 
       - name: Upload do instalador (artefato)
         uses: actions/upload-artifact@v4

@@ -58,6 +58,28 @@ Gemini** (`gemini-2.0-flash`) na aba *Configurações* → *Provedor*. Cada prov
 tem sua própria chave (guardada localmente). Variáveis de ambiente aceitas:
 `OPENAI_API_KEY` e `GEMINI_API_KEY` (ou `GOOGLE_API_KEY`).
 
+As chaves ficam **criptografadas** no `config.json` com a DPAPI do Windows, que
+as amarra à sua conta de usuário: copiar o arquivo para outra máquina não
+revela nada. Configs antigos, em texto puro, continuam funcionando e são
+criptografados no próximo salvamento.
+
+### Whisper local (offline, sem custo)
+
+Há um provedor **Whisper local (offline)**, que roda na sua máquina: não envia
+áudio para ninguém e não consome API. Ele **não vem no instalador** porque o
+runtime e os modelos passam de várias centenas de MB.
+
+Para usar, rodando a partir do código:
+
+```powershell
+pip install "fala-ai[local]"
+```
+
+Depois escolha *Configurações → Provedor → Whisper local* e o **Modelo**:
+`tiny`, `base`, `small` (padrão), `medium` ou `large-v3` — maior significa
+melhor qualidade e mais lentidão. O modelo é baixado uma vez e fica em cache.
+Sem a biblioteca instalada, o app avisa exatamente o que fazer em vez de falhar.
+
 ## Executar
 
 ```powershell
@@ -140,6 +162,31 @@ Inno Setup. No fim você tem:
 
 **Quem recebe o `Setup.exe`** só dá duplo clique, escolhe (opcional) atalho na
 área de trabalho e iniciar com o Windows, e pronto — não precisa de Python.
+
+### O aviso do SmartScreen (e como assinar o app)
+
+Como o instalador **não é assinado digitalmente**, o Windows mostra *"O Windows
+protegeu o seu computador"* na primeira execução. Não é vírus nem erro: é a
+reputação do arquivo. Para instalar assim mesmo: **Mais informações → Executar
+assim mesmo**.
+
+Para eliminar o aviso é preciso um **certificado de assinatura de código**
+(pago, emitido em nome de uma pessoa ou empresa):
+
+| Tipo | Custo aproximado | Efeito no SmartScreen |
+|---|---|---|
+| **OV** (validação da organização) | ~US$ 150–250/ano | Some depois que o app ganha reputação (downloads) |
+| **EV** (validação estendida) | ~US$ 300–500/ano | Some **de imediato** |
+
+O build já está preparado: se existirem os *secrets* abaixo no repositório, o
+GitHub Actions assina o `.exe` e o instalador automaticamente (com carimbo de
+tempo). Sem eles, o build segue normal, sem assinatura.
+
+- `WINDOWS_CERT_BASE64` — o arquivo `.pfx` do certificado em Base64
+  (`certutil -encode cert.pfx cert.txt` e cole o conteúdo)
+- `WINDOWS_CERT_PASSWORD` — a senha do `.pfx`
+
+> Certificado autoassinado **não** resolve: o SmartScreen continua avisando.
 
 > A chave da Groq não vai dentro do instalador. No primeiro uso, defina-a pela
 > aba *Configurações* ou na variável de ambiente `GROQ_API_KEY`.

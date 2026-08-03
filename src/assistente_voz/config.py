@@ -23,17 +23,21 @@ DEFAULT_UPDATE_REPO = "vinicius-bao/fala-ai"
 AI_NOTE = "transcrito por IA (pode ocorrer alguma divergência na fala)"
 
 # Provedores de transcrição disponíveis.
-PROVIDERS = ("groq", "openai", "gemini")
+PROVIDERS = ("groq", "openai", "gemini", "local")
 PROVIDER_LABELS = {
     "groq": "Groq (Whisper)",
     "openai": "OpenAI",
     "gemini": "Google Gemini",
+    "local": "Whisper local (offline)",
 }
 DEFAULT_MODELS = {
     "groq": "whisper-large-v3",
     "openai": "gpt-4o-transcribe",
     "gemini": "gemini-2.0-flash",
+    "local": "small",
 }
+# Provedores que rodam na nuvem e exigem chave de API.
+NEEDS_KEY = ("groq", "openai", "gemini")
 # Modelos de CHAT (usados no refinamento).
 DEFAULT_CHAT_MODELS = {
     "groq": "llama-3.3-70b-versatile",
@@ -115,6 +119,7 @@ class Config:
     openai_api_key: str = ""           # vazio => usa OPENAI_API_KEY do ambiente
     gemini_model: str = "gemini-2.0-flash"
     gemini_api_key: str = ""           # vazio => usa GEMINI_API_KEY do ambiente
+    local_model: str = "small"         # Whisper local: tiny/base/small/medium/large-v3
     refine_hotkey: str = "ctrl+alt+w"  # 2º atalho: transcreve e refina via LLM
     refiner_provider: str = "groq"
     refiner_model: str = "llama-3.3-70b-versatile"
@@ -150,27 +155,46 @@ def config_path() -> Path:
     return config_dir() / "config.json"
 
 
+KEY_FIELDS = ("groq_api_key", "openai_api_key", "gemini_api_key")
+
+
 def load_config(path: Path | None = None) -> Config:
     path = path or config_path()
     if path.exists():
         try:
-            return Config.from_dict(json.loads(path.read_text(encoding="utf-8")))
+            from .crypto import unprotect
+
+            data = json.loads(path.read_text(encoding="utf-8"))
+            for field in KEY_FIELDS:  # chaves ficam criptografadas em disco
+                if isinstance(data.get(field), str):
+                    data[field] = unprotect(data[field])
+            return Config.from_dict(data)
         except (json.JSONDecodeError, OSError):
             pass
     return Config()
 
 
 def save_config(cfg: Config, path: Path | None = None) -> None:
+    from .crypto import protect
+
     path = path or config_path()
     path.parent.mkdir(parents=True, exist_ok=True)
+    data = cfg.to_dict()
+    for field in KEY_FIELDS:
+        data[field] = protect(data.get(field, ""))
     path.write_text(
-        json.dumps(cfg.to_dict(), indent=2, ensure_ascii=False), encoding="utf-8"
+        json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"
     )
 
 
 def resolve_api_key(cfg: Config) -> str:
     """Resolve a chave da Groq: ambiente primeiro, depois config."""
     return os.environ.get("GROQ_API_KEY", "").strip() or cfg.groq_api_key.strip()
+
+
+def provider_needs_key(provider: str) -> bool:
+    """O Whisper local roda offline: não precisa de chave."""
+    return provider in NEEDS_KEY
 
 
 def provider_key_field(cfg: Config, provider: str) -> str:
@@ -186,12 +210,15 @@ def provider_model(cfg: Config, provider: str) -> str:
         "groq": cfg.groq_model,
         "openai": cfg.openai_model,
         "gemini": cfg.gemini_model,
+        "local": cfg.local_model,
     }.get(provider, "")
     return model.strip() or DEFAULT_MODELS.get(provider, "")
 
 
 def resolve_provider_key(cfg: Config, provider: str) -> str:
     """Chave do provedor: variável de ambiente primeiro, depois a do config."""
+    if not provider_needs_key(provider):
+        return "local"  # sentinela: offline não usa chave
     for env in _PROVIDER_ENV.get(provider, ()):
         value = os.environ.get(env, "").strip()
         if value:

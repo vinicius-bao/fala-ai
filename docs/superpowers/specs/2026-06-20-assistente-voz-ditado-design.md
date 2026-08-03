@@ -350,3 +350,18 @@ principalmente **mensagens de voz do WhatsApp**.
   gravar (`_start_recording`) ou transcrever um arquivo sem chave; a janela abre
   o mesmo diálogo com o motivo em destaque, em vez de falhar em silêncio.
   `_rebuild_engine` ficou silencioso — quem avisa é quem tenta usar.
+
+## 26. Adendo — Whisper local, chaves protegidas e assinatura
+
+- **Whisper local** (`provider="local"`): `LocalWhisperEngine` sobre
+  `faster-whisper`, offline e sem custo. Dependência **opcional**
+  (`pip install "fala-ai[local]"`) porque runtime + modelos passam de centenas
+  de MB e inchariam o instalador; sem ela, o erro explica o que instalar.
+  `provider_needs_key` isenta o local de chave (UI desabilita o campo).
+- **Chaves protegidas** (`crypto.py`): DPAPI do Windows (`CryptProtectData`),
+  amarrando o segredo à conta do usuário. Gravação/leitura em `save_config`/
+  `load_config`, com prefixo `dpapi:v1:`. Config antigo em texto puro continua
+  válido; falha de leitura devolve vazio em vez de quebrar.
+- **Assinatura de código**: o workflow assina `.exe` e instalador com `signtool`
+  **se** existirem os secrets `WINDOWS_CERT_BASE64`/`WINDOWS_CERT_PASSWORD`.
+  Sem eles o build segue sem assinar. O certificado é uma compra externa.

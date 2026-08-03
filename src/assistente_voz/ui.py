@@ -38,6 +38,7 @@ from .audio import list_input_devices
 from .audiofile import SUPPORTED_EXTS, is_supported
 from .config import (
     AI_NOTE,
+    provider_needs_key,
     DEFAULT_CHAT_MODELS,
     DEFAULT_MODELS,
     DEFAULT_REFINE_PROMPT,
@@ -841,11 +842,13 @@ class MainWindow(QMainWindow):
             "groq": cfg.groq_api_key,
             "openai": cfg.openai_api_key,
             "gemini": cfg.gemini_api_key,
+            "local": "",
         }
         self._prov_models = {
             "groq": cfg.groq_model,
             "openai": cfg.openai_model,
             "gemini": cfg.gemini_model,
+            "local": cfg.local_model,
         }
         self._cur_provider = cfg.provider if cfg.provider in PROVIDERS else "groq"
         self.provider_combo = NoScrollComboBox()
@@ -872,6 +875,7 @@ class MainWindow(QMainWindow):
         form.addRow("Modelo", self.model_edit)
         form.addRow("Chave (API)", self.apikey_edit)
         form.addRow("Termos frequentes", self.hint_edit)
+        self._sync_key_visibility()
         col.addWidget(card)
 
         # --- Refinamento ---
@@ -978,6 +982,20 @@ class MainWindow(QMainWindow):
         self._cur_provider = p
         self.model_edit.setText(self._prov_models.get(p) or DEFAULT_MODELS[p])
         self.apikey_edit.setText(self._prov_keys.get(p, ""))
+        self._sync_key_visibility()
+
+    def _sync_key_visibility(self) -> None:
+        """Whisper local não usa chave: some com o campo e explica o modelo."""
+        needs = provider_needs_key(self._cur_provider)
+        self.apikey_edit.setEnabled(needs)
+        self.apikey_edit.setPlaceholderText(
+            "cole a chave do provedor selecionado" if needs
+            else "não precisa de chave — roda offline na sua máquina"
+        )
+        self.model_edit.setToolTip(
+            "" if needs else
+            "tiny, base, small, medium ou large-v3 (maior = melhor e mais lento)"
+        )
 
     # ----- salvamento ao vivo -----
     def _connect_autosave(self) -> None:
@@ -1068,6 +1086,7 @@ class MainWindow(QMainWindow):
             openai_api_key=self._prov_keys["openai"],
             gemini_model=self._prov_models["gemini"] or DEFAULT_MODELS["gemini"],
             gemini_api_key=self._prov_keys["gemini"],
+            local_model=self._prov_models["local"] or DEFAULT_MODELS["local"],
             refine_hotkey=self.refine_hotkey_btn.value(),
             refiner_provider=self.refiner_combo.currentData(),
             refiner_model=self.refiner_model_edit.text().strip()

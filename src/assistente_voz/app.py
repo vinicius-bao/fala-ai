@@ -22,6 +22,7 @@ from .config import (
     append_note,
     config_dir,
     provider_model,
+    provider_needs_key,
     resolve_provider_key,
 )
 from .history import History, Transcription
@@ -181,7 +182,10 @@ class Controller(QObject):
         return getattr(self._recorder, "level", 0.0)
 
     def has_api_key(self) -> bool:
-        return bool(resolve_provider_key(self.config, self.config.provider))
+        provider = self.config.provider
+        if not provider_needs_key(provider):
+            return True  # Whisper local roda offline
+        return bool(resolve_provider_key(self.config, provider))
 
     def _rebuild_engine(self) -> None:
         provider = self.config.provider
@@ -195,7 +199,8 @@ class Controller(QObject):
             )
         except Exception as e:  # noqa: BLE001
             self._engine = None
-            self.failed.emit(f"Falha ao iniciar a transcrição: {e}")
+            log.exception("Falha ao iniciar o motor de transcrição")
+            self.failed.emit(str(e))
 
     def _engine_label(self) -> str:
         return f"{self.config.provider}:{provider_model(self.config, self.config.provider)}"

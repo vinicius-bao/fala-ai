@@ -22,6 +22,9 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=7", "pyinstaller>=6", "pillow>=10"]
+# Transcrição offline. Não entra no instalador (baixa centenas de MB de runtime
+# e modelo); instale à parte com:  pip install "fala-ai[local]"
+local = ["faster-whisper>=1.0"]
 
 [project.scripts]
 assistente-voz = "assistente_voz.__main__:main"

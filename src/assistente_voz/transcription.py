@@ -143,10 +143,51 @@ class GeminiEngine:
         return data["candidates"][0]["content"]["parts"][0]["text"].strip()
 
 
+class LocalWhisperEngine:
+    """Whisper rodando na própria máquina (faster-whisper). Offline e sem custo.
+
+    O modelo é baixado uma vez na primeira utilização e fica em cache.
+    """
+
+    INSTALL_HINT = (
+        "O Whisper local precisa do pacote 'faster-whisper', que não vem junto "
+        "com o instalador (são centenas de MB). Instale com "
+        "'pip install faster-whisper' ou escolha outro provedor."
+    )
+
+    def __init__(self, api_key: str = "", model: str = "small"):
+        try:
+            from faster_whisper import WhisperModel
+        except ImportError as e:
+            raise RuntimeError(self.INSTALL_HINT) from e
+        # int8 na CPU é o melhor custo/benefício; com GPU o ctranslate2 usa CUDA
+        self._model = WhisperModel(model or "small", device="auto",
+                                   compute_type="int8")
+
+    def transcribe(
+        self,
+        audio_bytes: bytes,
+        language: str = "pt",
+        filename: str = "audio.wav",
+        hint: str = "",
+    ) -> str:
+        import io
+
+        segments, _info = self._model.transcribe(
+            io.BytesIO(audio_bytes),
+            language=language or None,
+            initial_prompt=hint or None,
+            vad_filter=True,
+        )
+        return " ".join(seg.text.strip() for seg in segments).strip()
+
+
 def make_engine(provider: str, api_key: str, model: str) -> TranscriptionEngine:
     """Cria o motor de transcrição do provedor escolhido."""
     if provider == "openai":
         return OpenAIEngine(api_key, model)
     if provider == "gemini":
         return GeminiEngine(api_key, model)
+    if provider == "local":
+        return LocalWhisperEngine(model=model)
     return GroqEngine(api_key, model)
