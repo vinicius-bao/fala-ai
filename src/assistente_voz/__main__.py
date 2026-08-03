@@ -96,7 +96,7 @@ def main() -> int:
 
     def _on_overlay(state: str, text: str) -> None:
         if state == "recording":
-            overlay.show_recording()
+            overlay.show_recording(text)
         elif state == "processing":
             overlay.show_processing(text or "Transcrevendo…")
         elif state == "done":

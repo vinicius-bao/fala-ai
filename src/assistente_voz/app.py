@@ -216,14 +216,26 @@ class Controller(QObject):
 
     # ---- ativação (thread do Qt) ----
     def _on_start(self) -> None:
-        if self._activation.state is State.IDLE:
-            self._pending_refine = False
-        self._run_action(self._activation.on_press())
+        self._press(refine=False)
 
     def _on_start_refine(self) -> None:
-        if self._activation.state is State.IDLE:
-            self._pending_refine = True
+        self._press(refine=True)
+
+    def _press(self, refine: bool) -> None:
+        """Quem aperta manda: o atalho usado decide se vai refinar.
+
+        Vale tanto ao abrir quanto ao fechar a gravação — então dá para começar
+        com o atalho de ditado e terminar com o de refino (ou o contrário) que
+        a intenção passa a ser a do último atalho apertado.
+        """
+        if self._activation.state in (State.IDLE, State.RECORDING):
+            self._pending_refine = refine
         self._run_action(self._activation.on_press())
+        if self._activation.state is State.RECORDING:
+            # mostra no pop-up o que vai acontecer ao terminar
+            self.overlayState.emit(
+                "recording", "refino" if self._pending_refine else ""
+            )
 
     def _on_release(self, duration_ms: float) -> None:
         self._run_action(self._activation.on_release(duration_ms))

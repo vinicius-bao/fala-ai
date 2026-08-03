@@ -229,16 +229,22 @@ class RecordingOverlay(QWidget):
         p.end()
 
     # ---- estados ----
-    def show_recording(self) -> None:
+    def show_recording(self, mode: str = "") -> None:
+        already = self._wave_timer.isActive()
+        self._refine_mode = mode == "refino"
         self._hide_timer.stop()
         self._wave.show()
-        self._wave.reset()
         self._bar.hide()
         self._stop_btn.show()
         self._cancel_btn.show()
-        self._set_dot("mic", "#E5484D")
+        self._set_dot("sparkle" if self._refine_mode else "mic",
+                      "#B48BB9" if self._refine_mode else "#E5484D")
+        if already:
+            self._tick_elapsed()  # só mudou a intenção: não zera o cronômetro
+            return
+        self._wave.reset()
         self._t0 = QTime.currentTime()
-        self._label.setText("0:00")
+        self._tick_elapsed()
         self._wave_timer.start()
         self._elapsed_timer.start()
         self._show_at_bottom()
@@ -301,4 +307,8 @@ class RecordingOverlay(QWidget):
         if self._t0 is None:
             return
         secs = self._t0.secsTo(QTime.currentTime())
-        self._label.setText(f"{secs // 60}:{secs % 60:02d}")
+        tempo = f"{secs // 60}:{secs % 60:02d}"
+        if getattr(self, "_refine_mode", False):
+            self._label.setText(f"{tempo}  ·  refino")
+        else:
+            self._label.setText(tempo)
