@@ -63,26 +63,37 @@ def _badge(icon_name: str, color: str, size: int = 24) -> QPixmap:
 class _WaveBars(QWidget):
     """Onda de voz: cada barra persegue suavemente o nível do microfone."""
 
+    FLOOR = 0.05      # abaixo disso é ruído de sala, não fala
+    MIN_REF = 0.06    # referência mínima: evita amplificar o silêncio
+
     def __init__(self, n: int = 21, parent=None):
         super().__init__(parent)
         self._n = n
-        self._levels = [0.06] * n   # histórico rolante do que foi falado
-        self._smooth = 0.06         # nível suavizado no tempo
+        self._levels = [0.0] * n    # histórico rolante do que foi falado
+        self._smooth = 0.0          # nível suavizado no tempo
+        self._peak = 0.12           # ganho automático: sobe na hora, desce devagar
         self._phase = 0.0
         self.setFixedSize(n * 7, 30)
         self.setAttribute(Qt.WA_TransparentForMouseEvents)
 
     def reset(self) -> None:
-        self._levels = [0.06] * self._n
-        self._smooth = 0.06
+        self._levels = [0.0] * self._n
+        self._smooth = 0.0
+        self._peak = 0.12
         self._repaint()
 
     def push(self, level: float) -> None:
-        """Entra um novo nível: rola o histórico e repinta."""
+        """Entra um novo nível (0..1): normaliza, rola o histórico e repinta."""
         level = max(0.0, min(1.0, level))
+        # Ganho automático: acompanha o pico recente e decai devagar, então a
+        # onda fica útil tanto num microfone forte quanto num fraco.
+        self._peak = max(level, self._peak * 0.995)
+        amplitude = max(0.0, level - self.FLOOR)
+        reference = max(self.MIN_REF, self._peak - self.FLOOR)
+        shown = min(1.0, amplitude / reference)
         # sobe rápido (acompanha a voz) e desce mais devagar (fica fluido)
-        k = 0.6 if level > self._smooth else 0.25
-        self._smooth += (level - self._smooth) * k
+        k = 0.65 if shown > self._smooth else 0.25
+        self._smooth += (shown - self._smooth) * k
         self._phase += 0.5
         self._levels = self._levels[1:] + [self._smooth]
         self._repaint()
