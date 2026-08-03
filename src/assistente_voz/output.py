@@ -1,9 +1,10 @@
-"""Entrega do texto: clipboard + colar (Ctrl+V) no app em foco."""
+"""Entrega do texto: clipboard + colar (Ctrl+V) no app em foco.
+
+Nada aqui pode dormir na thread da interface — quem espera é o QTimer de quem
+chama (ver ``Controller._finish_output``), senão o app congela ao colar.
+"""
 
 from __future__ import annotations
-
-import threading
-import time
 
 
 class TextOutput:
@@ -22,47 +23,35 @@ class TextOutput:
 
         pyperclip.copy(text)
 
-    def _read_clipboard(self) -> str:
+    def read_clipboard(self) -> str:
         import pyperclip
 
         try:
             return pyperclip.paste()
-        except Exception:
+        except Exception:  # noqa: BLE001
             return ""
 
-    def paste_into_active(self, text: str, restore_clipboard: bool = False) -> bool:
-        """Coloca o texto no clipboard e envia Ctrl+V. Retorna True se conseguiu
-        enviar o atalho de colar (não há como saber se o app o aceitou)."""
-        import pyperclip
+    def stage(self, text: str, keep_previous: bool = False) -> str | None:
+        """Coloca o texto no clipboard. Devolve o conteúdo anterior, se pedido."""
+        previous = self.read_clipboard() if keep_previous else None
+        self.to_clipboard(text)
+        return previous
+
+    def send_paste(self) -> bool:
+        """Envia Ctrl+V para a janela em foco."""
         from pynput.keyboard import Key
 
-        previous = self._read_clipboard() if restore_clipboard else None
-        pyperclip.copy(text)
-        time.sleep(0.05)
         try:
             kb = self._keyboard()
             with kb.pressed(Key.ctrl):
                 kb.press("v")
                 kb.release("v")
-        except Exception:
+            return True
+        except Exception:  # noqa: BLE001
             return False
 
-        if restore_clipboard and previous is not None:
-            def _restore():
-                time.sleep(0.4)
-                try:
-                    pyperclip.copy(previous)
-                except Exception:
-                    pass
-
-            threading.Thread(target=_restore, daemon=True).start()
-        return True
-
-    def deliver(
-        self, text: str, mode: str = "paste", restore_clipboard: bool = False
-    ) -> bool:
-        """`mode`: 'paste' cola no app ativo; 'clipboard_only' só copia."""
-        if mode == "clipboard_only":
-            self.to_clipboard(text)
-            return False
-        return self.paste_into_active(text, restore_clipboard=restore_clipboard)
+    def restore(self, previous: str) -> None:
+        try:
+            self.to_clipboard(previous)
+        except Exception:  # noqa: BLE001
+            pass

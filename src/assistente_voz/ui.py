@@ -632,7 +632,13 @@ class MainWindow(QMainWindow):
         self.search_edit = QLineEdit()
         self.search_edit.setPlaceholderText("Buscar no histórico…")
         self.search_edit.setClearButtonEnabled(True)
-        self.search_edit.textChanged.connect(lambda _: self.refresh_history())
+        # Filtrar reconstrói a lista inteira; espera parar de digitar.
+        self._search_timer = QTimer(self)
+        self._search_timer.setSingleShot(True)
+        self._search_timer.timeout.connect(self.refresh_history)
+        self.search_edit.textChanged.connect(
+            lambda _: self._search_timer.start(250)
+        )
         hint = self.search_edit
         clear_btn = QPushButton()
         clear_btn.setObjectName("IconBtn")
@@ -686,8 +692,25 @@ class MainWindow(QMainWindow):
         lay.addWidget(self.empty_label)
         return w
 
+    def _insert_card(self, entry, row: int) -> None:
+        card = HistoryCard(
+            entry, self._copy_text, self._refine_entry, self._delete_entry
+        )
+        self._cards[entry.uid] = card
+        item = QListWidgetItem()
+        item.setData(Qt.UserRole, entry.uid)  # para limpar o cartão ao remover
+        # Largura 1: a lista estica o item até a área visível sozinha.
+        item.setSizeHint(QSize(1, max(50, card.sizeHint().height())))
+        self.history_list.insertItem(row, item)
+        self.history_list.setItemWidget(item, card)
+
     def refresh_history(self) -> None:
-        self.history_list.clear()
+        """Atualiza a lista reaproveitando os cartões já criados.
+
+        Reconstruir os 50 cartões a cada transcrição travava a interface por
+        centenas de milissegundos. No caso comum (entrou item novo no topo) só
+        os novos são criados.
+        """
         size = self.controller.config.history_size
         query = self.search_edit.text() if hasattr(self, "search_edit") else ""
         entries = (
@@ -702,17 +725,33 @@ class MainWindow(QMainWindow):
             else "Nada por aqui ainda — grave algo para começar."
         )
         self.history_list.setVisible(bool(entries))
-        self._cards = {}
-        for entry in entries:
-            card = HistoryCard(
-                entry, self._copy_text, self._refine_entry, self._delete_entry
-            )
-            self._cards[entry.uid] = card
-            item = QListWidgetItem()
-            # Largura 1: a lista estica o item até a área visível sozinha.
-            item.setSizeHint(QSize(1, max(50, card.sizeHint().height())))
-            self.history_list.addItem(item)
-            self.history_list.setItemWidget(item, card)
+
+        new_uids = [e.uid for e in entries]
+        old_uids = getattr(self, "_visible_uids", [])
+        # Quantos itens entraram no topo desde a última vez?
+        known = set(old_uids)
+        lead = 0
+        while lead < len(new_uids) and new_uids[lead] not in known:
+            lead += 1
+        incremental = (
+            bool(old_uids)
+            and lead < len(new_uids)
+            and new_uids[lead:] == old_uids[: len(new_uids) - lead]
+        )
+
+        if incremental:
+            for entry in reversed(entries[:lead]):     # novos, do topo
+                self._insert_card(entry, 0)
+            while self.history_list.count() > len(new_uids):   # sobras do fim
+                item = self.history_list.takeItem(self.history_list.count() - 1)
+                self._cards.pop(item.data(Qt.UserRole), None)
+                del item
+        else:
+            self.history_list.clear()
+            self._cards = {}
+            for entry in entries:
+                self._insert_card(entry, self.history_list.count())
+        self._visible_uids = new_uids
 
     def _update_pending(self, count: int | None = None) -> None:
         if count is None:

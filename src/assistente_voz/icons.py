@@ -151,5 +151,14 @@ def pixmap(name: str, size: int = 20, color: str = "#FFFFFF") -> QPixmap:
     return pm
 
 
+_ICON_CACHE: dict = {}
+
+
 def icon(name: str, size: int = 20, color: str = "#FFFFFF") -> QIcon:
-    return QIcon(pixmap(name, size, color))
+    """Ícone memorizado — a lista do histórico pedia centenas por atualização."""
+    key = (name, size, color, _dpr())
+    cached = _ICON_CACHE.get(key)
+    if cached is None:
+        cached = QIcon(pixmap(name, size, color))
+        _ICON_CACHE[key] = cached
+    return cached

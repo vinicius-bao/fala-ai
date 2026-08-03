@@ -12,7 +12,7 @@ import os
 import threading
 import time
 
-from PySide6.QtCore import QObject, Qt, Signal
+from PySide6.QtCore import QObject, Qt, QTimer, Signal
 
 from .activation import Action, Activation, State
 from .audio import Recorder
@@ -335,11 +335,13 @@ class Controller(QObject):
             text = append_note(text, self.config.ai_note_text)
         self.history.add(Transcription.create(text, duration, self._engine_label()))
         self.historyChanged.emit()
-        self._output.deliver(
-            text,
-            mode=self.config.output_mode,
-            restore_clipboard=self.config.restore_clipboard,
-        )
+        # Clipboard agora; colar e restaurar por temporizador, para a interface
+        # não congelar esperando (era um sleep na thread da UI).
+        previous = self._output.stage(text, self.config.restore_clipboard)
+        if self.config.output_mode != "clipboard_only":
+            QTimer.singleShot(60, self._output.send_paste)
+            if previous is not None:
+                QTimer.singleShot(600, lambda: self._output.restore(previous))
         self.transcribed.emit(text)
         done = "Colado ✓" if self.config.output_mode == "paste" else "Copiado ✓"
         self.overlayState.emit("done", done)
