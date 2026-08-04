@@ -38,6 +38,7 @@ from .audio import list_input_devices
 from .audiofile import SUPPORTED_EXTS, is_supported
 from .config import (
     AI_NOTE,
+    available_providers,
     provider_needs_key,
     DEFAULT_CHAT_MODELS,
     DEFAULT_MODELS,
@@ -892,10 +893,17 @@ class MainWindow(QMainWindow):
             "gemini": cfg.gemini_model,
             "local": cfg.local_model,
         }
-        self._cur_provider = cfg.provider if cfg.provider in PROVIDERS else "groq"
+        # Só oferece o que realmente funciona aqui: no app instalado o Whisper
+        # local não existe, e escolhê-lo deixava o app sem transcrever nada.
+        usaveis = available_providers()
+        self._cur_provider = cfg.provider if cfg.provider in usaveis else "groq"
         self.provider_combo = NoScrollComboBox()
-        for _p in PROVIDERS:
+        for _p in usaveis:
             self.provider_combo.addItem(PROVIDER_LABELS[_p], _p)
+        if cfg.provider not in usaveis and cfg.provider in PROVIDER_LABELS:
+            self.provider_combo.addItem(
+                PROVIDER_LABELS[cfg.provider] + " — indisponível", cfg.provider
+            )
         _pi = self.provider_combo.findData(self._cur_provider)
         self.provider_combo.setCurrentIndex(_pi if _pi >= 0 else 0)
         self.model_edit = QLineEdit(

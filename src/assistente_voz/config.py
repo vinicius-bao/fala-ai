@@ -192,6 +192,24 @@ def resolve_api_key(cfg: Config) -> str:
     return os.environ.get("GROQ_API_KEY", "").strip() or cfg.groq_api_key.strip()
 
 
+def local_whisper_available() -> bool:
+    """O Whisper local só funciona se a biblioteca estiver instalada."""
+    import importlib.util
+
+    return importlib.util.find_spec("faster_whisper") is not None
+
+
+def available_providers() -> tuple:
+    """Provedores que realmente funcionam nesta instalação.
+
+    Não adianta oferecer o Whisper local no app instalado se a biblioteca não
+    veio junto: o usuário escolhe, o app aceita e nada transcreve.
+    """
+    return tuple(
+        p for p in PROVIDERS if p != "local" or local_whisper_available()
+    )
+
+
 def provider_needs_key(provider: str) -> bool:
     """O Whisper local roda offline: não precisa de chave."""
     return provider in NEEDS_KEY

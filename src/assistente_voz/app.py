@@ -78,6 +78,7 @@ class Controller(QObject):
         self._recorder = Recorder(device=config.input_device)
         self._output = TextOutput()
         self._engine = None
+        self._engine_error = ""
         self._refiner = None
         self._pending_refine = False
         self._hotkey: HotkeyListener | None = None
@@ -200,6 +201,7 @@ class Controller(QObject):
 
     def _rebuild_engine(self) -> None:
         provider = self.config.provider
+        self._engine_error = ""
         key = resolve_provider_key(self.config, provider)
         if not key:
             self._engine = None  # silencioso: quem avisa é quem tenta usar
@@ -210,8 +212,8 @@ class Controller(QObject):
             )
         except Exception as e:  # noqa: BLE001
             self._engine = None
+            self._engine_error = str(e)
             log.exception("Falha ao iniciar o motor de transcrição")
-            self.failed.emit(str(e))
 
     def _engine_label(self) -> str:
         return f"{self.config.provider}:{provider_model(self.config, self.config.provider)}"
@@ -323,9 +325,15 @@ class Controller(QObject):
         if self._engine is None:
             self._rebuild_engine()
         if self._engine is None:
+            # Falha aqui era invisível (só barra de status, com a janela
+            # fechada). Agora abre a janela explicando o motivo.
             self._activation.on_transcription_done()
             self.overlayState.emit("hidden", "")
             self._emit_state()
+            self.setupNeeded.emit(
+                self._engine_error
+                or "Falta a chave de API para transcrever o que você falar."
+            )
             return
         self.overlayState.emit("processing", "Transcrevendo…")
         self._watchdog.start(120_000)   # 2 min: nunca ficar preso
@@ -508,7 +516,8 @@ class Controller(QObject):
             self._rebuild_engine()
         if self._engine is None:
             self.setupNeeded.emit(
-                "Falta a chave de API para transcrever este áudio."
+                self._engine_error
+                or "Falta a chave de API para transcrever este áudio."
             )
             return
         self.fileBusy.emit(True)
