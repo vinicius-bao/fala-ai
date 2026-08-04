@@ -740,13 +740,16 @@ class MainWindow(QMainWindow):
         )
 
         if incremental:
-            for entry in reversed(entries[:lead]):     # novos, do topo
-                self._insert_card(entry, 0)
-            while self.history_list.count() > len(new_uids):   # sobras do fim
-                item = self.history_list.takeItem(self.history_list.count() - 1)
-                self._cards.pop(item.data(Qt.UserRole), None)
-                del item
-        else:
+            try:
+                for entry in reversed(entries[:lead]):     # novos, do topo
+                    self._insert_card(entry, 0)
+                while self.history_list.count() > len(new_uids):   # sobras do fim
+                    item = self.history_list.takeItem(self.history_list.count() - 1)
+                    self._cards.pop(item.data(Qt.UserRole), None)
+                    del item
+            except Exception:  # noqa: BLE001 — nunca deixar a lista inconsistente
+                incremental = False
+        if not incremental:
             self.history_list.clear()
             self._cards = {}
             for entry in entries:

@@ -30,7 +30,7 @@ class GroqRefiner:
             raise ValueError("Chave da Groq ausente")
         from groq import Groq
 
-        self._client = Groq(api_key=api_key)
+        self._client = Groq(api_key=api_key, timeout=90.0, max_retries=2)
         self._model = model
 
     def refine(self, text: str, system_prompt: str, context: str = "") -> str:
@@ -51,7 +51,7 @@ class OpenAIRefiner:
             raise ValueError("Chave da OpenAI ausente")
         from openai import OpenAI
 
-        self._client = OpenAI(api_key=api_key)
+        self._client = OpenAI(api_key=api_key, timeout=90.0, max_retries=2)
         self._model = model
 
     def refine(self, text: str, system_prompt: str, context: str = "") -> str:

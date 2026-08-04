@@ -100,6 +100,17 @@ class Controller(QObject):
         self._itemRefineFailed.connect(self._on_item_refine_failed, Qt.QueuedConnection)
         self._update_manual = False
 
+        # Se a transcrição não voltar (rede pendurada, driver travado…), o app
+        # não pode ficar preso em "transcrevendo" e ignorando o atalho.
+        self._watchdog = QTimer(self)
+        self._watchdog.setSingleShot(True)
+        self._watchdog.timeout.connect(self._on_watchdog)
+
+    def _on_watchdog(self) -> None:
+        if self._activation.state is State.TRANSCRIBING:
+            log.warning("Transcrição não respondeu a tempo; destravando")
+            self.recover("A transcrição demorou demais. Pode gravar de novo.")
+
     # ---- ciclo de vida ----
     def start(self) -> None:
         self._rebuild_engine()
@@ -246,11 +257,33 @@ class Controller(QObject):
         self._run_action(self._activation.on_release(duration_ms))
 
     def _run_action(self, action: Action) -> None:
-        if action is Action.START_RECORDING:
-            self._start_recording()
-        elif action is Action.STOP_AND_TRANSCRIBE:
-            self._stop_and_transcribe()
-        # LATCH_TOGGLE / NONE: nada a fazer (segue gravando ou ignora)
+        # Rede de segurança: o estado vira TRANSCREVENDO antes desta chamada.
+        # Se algo estourar aqui e não destravarmos, o atalho fica morto para
+        # sempre — foi exatamente o que aconteceu na v0.13.0.
+        try:
+            if action is Action.START_RECORDING:
+                self._start_recording()
+            elif action is Action.STOP_AND_TRANSCRIBE:
+                self._stop_and_transcribe()
+            # LATCH_TOGGLE / NONE: nada a fazer (segue gravando ou ignora)
+        except Exception as e:  # noqa: BLE001
+            log.exception("Falha ao executar %s", action)
+            self.recover(f"Algo falhou ({e}); pode gravar de novo.")
+        self._emit_state()
+
+    def recover(self, message: str = "") -> None:
+        """Destrava o app: volta para ocioso e some com o pop-up."""
+        try:
+            if self._recorder.is_recording:
+                self._recorder.stop()
+        except Exception:  # noqa: BLE001
+            pass
+        self._activation.reset()
+        self._pending_refine = False
+        self._watchdog.stop()
+        self.overlayState.emit("hidden", "")
+        if message:
+            self.failed.emit(message)
         self._emit_state()
 
     def _start_recording(self) -> None:
@@ -295,6 +328,7 @@ class Controller(QObject):
             self._emit_state()
             return
         self.overlayState.emit("processing", "Transcrevendo…")
+        self._watchdog.start(120_000)   # 2 min: nunca ficar preso
         threading.Thread(
             target=self._worker, args=(wav, duration), daemon=True
         ).start()
@@ -312,6 +346,7 @@ class Controller(QObject):
             self._transcriptionFailed.emit(str(e), wav)
 
     def _on_ready(self, text: str, duration: float) -> None:
+        self._watchdog.stop()
         self._activation.on_transcription_done()
         self._emit_state()
         text = text.strip()
@@ -333,15 +368,23 @@ class Controller(QObject):
     def _finish_output(self, text: str, duration: float) -> None:
         if self.config.ai_note_enabled:
             text = append_note(text, self.config.ai_note_text)
-        self.history.add(Transcription.create(text, duration, self._engine_label()))
-        self.historyChanged.emit()
-        # Clipboard agora; colar e restaurar por temporizador, para a interface
-        # não congelar esperando (era um sleep na thread da UI).
-        previous = self._output.stage(text, self.config.restore_clipboard)
-        if self.config.output_mode != "clipboard_only":
-            QTimer.singleShot(60, self._output.send_paste)
-            if previous is not None:
-                QTimer.singleShot(600, lambda: self._output.restore(previous))
+        # Primeiro entrega o texto: uma falha na interface não pode fazer o
+        # usuário perder o que acabou de falar.
+        try:
+            previous = self._output.stage(text, self.config.restore_clipboard)
+            if self.config.output_mode != "clipboard_only":
+                QTimer.singleShot(60, self._output.send_paste)
+                if previous is not None:
+                    QTimer.singleShot(600, lambda: self._output.restore(previous))
+        except Exception as e:  # noqa: BLE001
+            log.exception("Falha ao entregar o texto")
+            self.failed.emit(f"Não consegui colar: {e}")
+        try:
+            self.history.add(Transcription.create(text, duration,
+                                                  self._engine_label()))
+            self.historyChanged.emit()
+        except Exception:  # noqa: BLE001
+            log.exception("Falha ao atualizar o histórico")
         self.transcribed.emit(text)
         done = "Colado ✓" if self.config.output_mode == "paste" else "Copiado ✓"
         self.overlayState.emit("done", done)
@@ -417,6 +460,7 @@ class Controller(QObject):
         self._finish_output(raw_text, duration)
 
     def _on_failed(self, message: str, wav: bytes) -> None:
+        self._watchdog.stop()
         self._activation.on_transcription_done()
         self._save_failed_audio(wav)
         self.failed.emit(
