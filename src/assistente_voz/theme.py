@@ -113,12 +113,14 @@ def build_qss(
         arrows += (
             f"QComboBox::down-arrow {{ image: url({chevron_down}); "
             "width: 12px; height: 8px; }\n"
-            f"QSpinBox::down-arrow {{ image: url({chevron_down}); "
+            f"QSpinBox::down-arrow, QDoubleSpinBox::down-arrow "
+            f"{{ image: url({chevron_down}); "
             "width: 12px; height: 8px; }\n"
         )
     if chevron_up:
         arrows += (
-            f"QSpinBox::up-arrow {{ image: url({chevron_up}); "
+            f"QSpinBox::up-arrow, QDoubleSpinBox::up-arrow "
+            f"{{ image: url({chevron_up}); "
             "width: 12px; height: 8px; }\n"
         )
     check_rule = f"image: url({check});" if check else ""
@@ -153,7 +155,7 @@ def build_qss(
     QPushButton#IconBtn:hover {{ background-color: {p.surface_alt};
         border-color: {p.border}; }}
 
-    #HistoryList {{ background: transparent; border: none; }}
+    #HistoryList {{ background: transparent; border: none; padding: 0; }}
     #HistoryList::item {{ background: transparent; border: none; padding: 0; }}
     #HistoryCard {{ background-color: {p.surface}; border: 1px solid {p.border};
         border-radius: 10px; }}
@@ -185,20 +187,23 @@ def build_qss(
         border: 1px solid {p.border}; border-radius: 11px; padding: 3px 10px;
         font-size: 11px; }}
 
-    QLineEdit, QPlainTextEdit, QSpinBox, QComboBox {{
+    QLineEdit, QPlainTextEdit, QSpinBox, QDoubleSpinBox, QComboBox {{
         background-color: {p.surface}; color: {p.text};
         border: 1px solid {p.border}; border-radius: 8px; padding: 6px 8px;
         selection-background-color: {p.accent}; selection-color: {p.accent_text}; }}
-    QLineEdit:focus, QPlainTextEdit:focus, QSpinBox:focus, QComboBox:focus {{
-        border-color: {p.accent}; }}
+    QLineEdit:focus, QPlainTextEdit:focus, QSpinBox:focus,
+    QDoubleSpinBox:focus, QComboBox:focus {{ border-color: {p.accent}; }}
+    QLineEdit:disabled, QSpinBox:disabled, QDoubleSpinBox:disabled,
+    QComboBox:disabled {{ color: {p.text_muted}; background-color: {p.bg}; }}
     QComboBox::drop-down {{ border: none; background: transparent; width: 24px;
         subcontrol-origin: padding; subcontrol-position: center right; }}
     {arrows}
     QComboBox QAbstractItemView {{ background-color: {p.surface};
         border: 1px solid {p.border}; border-radius: 8px; padding: 4px;
         selection-background-color: {p.accent}; selection-color: {p.accent_text}; }}
-    QSpinBox::up-button, QSpinBox::down-button {{ background: transparent;
-        border: none; width: 16px; margin-right: 4px; }}
+    QSpinBox::up-button, QSpinBox::down-button,
+    QDoubleSpinBox::up-button, QDoubleSpinBox::down-button {{
+        background: transparent; border: none; width: 16px; margin-right: 4px; }}
 
     QListWidget {{ background-color: {p.surface}; color: {p.text};
         border: 1px solid {p.border}; border-radius: 10px; padding: 4px; }}
@@ -216,11 +221,14 @@ def build_qss(
     QStatusBar {{ background-color: {p.surface}; color: {p.text_muted};
         border-top: 1px solid {p.border}; }}
 
+    QToolTip {{ background-color: {p.surface}; color: {p.text};
+        border: 1px solid {p.border}; border-radius: 6px; padding: 5px 8px; }}
     QMenu {{ background-color: {p.surface}; color: {p.text};
         border: 1px solid {p.border}; border-radius: 8px; padding: 4px; }}
     QMenu::item {{ padding: 6px 22px; border-radius: 6px; }}
     QMenu::item:selected {{ background-color: {p.accent}; color: {p.accent_text}; }}
 
+    QScrollBar {{ background: transparent; border: none; }}
     QScrollBar:vertical {{ background: transparent; width: 12px; margin: 0; }}
     QScrollBar::handle:vertical {{ background: {p.border}; border-radius: 6px;
         min-height: 28px; margin: 2px; }}

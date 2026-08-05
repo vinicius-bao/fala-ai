@@ -632,9 +632,10 @@ class MainWindow(QMainWindow):
         w = QWidget()
         lay = QVBoxLayout(w)
         lay.setContentsMargins(16, 14, 16, 14)
-        lay.setSpacing(10)
+        lay.setSpacing(12)
 
         top = QHBoxLayout()
+        top.setSpacing(8)
         self.search_edit = QLineEdit()
         self.search_edit.setPlaceholderText("Buscar no histórico…")
         self.search_edit.setClearButtonEnabled(True)
@@ -683,7 +684,8 @@ class MainWindow(QMainWindow):
 
         self.history_list = QListWidget()
         self.history_list.setObjectName("HistoryList")
-        self.history_list.setSpacing(6)
+        self.history_list.setFrameShape(QFrame.NoFrame)  # senão recua 2px
+        self.history_list.setSpacing(0)
         self.history_list.setSelectionMode(QAbstractItemView.NoSelection)
         # Sem barras visíveis: a roda do mouse continua rolando, e a largura da
         # área visível para de mudar (era o que cortava os cartões).
@@ -703,12 +705,19 @@ class MainWindow(QMainWindow):
             entry, self._copy_text, self._refine_entry, self._delete_entry
         )
         self._cards[entry.uid] = card
+        # Invólucro transparente só para o espaço entre cartões: o spacing da
+        # lista recuaria também as laterais, desalinhando com a busca acima.
+        holder = QWidget()
+        hl = QVBoxLayout(holder)
+        hl.setContentsMargins(0, 0, 0, 8)
+        hl.setSpacing(0)
+        hl.addWidget(card)
         item = QListWidgetItem()
         item.setData(Qt.UserRole, entry.uid)  # para limpar o cartão ao remover
         # Largura 1: a lista estica o item até a área visível sozinha.
-        item.setSizeHint(QSize(1, max(50, card.sizeHint().height())))
+        item.setSizeHint(QSize(1, max(50, card.sizeHint().height()) + 8))
         self.history_list.insertItem(row, item)
-        self.history_list.setItemWidget(item, card)
+        self.history_list.setItemWidget(item, holder)
 
     def refresh_history(self) -> None:
         """Atualiza a lista reaproveitando os cartões já criados.
