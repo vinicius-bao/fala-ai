@@ -46,6 +46,7 @@ class Recorder:
         self._stream = None
         self.last_duration_s = 0.0
         self.level = 0.0  # nível atual do microfone (0..1), p/ a onda do pop-up
+        self.peak_level = 0.0  # maior nível da gravação (detecta microfone mudo)
 
     @property
     def is_recording(self) -> bool:
@@ -56,6 +57,7 @@ class Recorder:
 
         self._frames = []
         self.level = 0.0
+        self.peak_level = 0.0
         self._stream = sd.InputStream(
             samplerate=self.samplerate,
             channels=self.channels,
@@ -70,6 +72,8 @@ class Recorder:
         chunk = bytes(indata)
         self._frames.append(chunk)
         self.level = self._rms_level(chunk)
+        if self.level > self.peak_level:
+            self.peak_level = self.level
 
     @staticmethod
     def _rms_level(pcm: bytes) -> float:

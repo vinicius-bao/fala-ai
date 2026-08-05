@@ -101,6 +101,8 @@ def main() -> int:
             overlay.show_processing(text or "Transcrevendo…")
         elif state == "done":
             overlay.show_done(text or "Colado ✓")
+        elif state == "warning":
+            overlay.show_warning(text or "Nada foi captado")
         else:
             overlay.hide_overlay()
 

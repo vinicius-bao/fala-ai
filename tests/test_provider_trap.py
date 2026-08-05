@@ -63,6 +63,7 @@ class TestFailureIsVisible(unittest.TestCase):
         c._recorder.start = lambda: None
         c._recorder.stop = lambda: b"x" * 100
         c._recorder.last_duration_s = 2.0
+        c._recorder.peak_level = 0.5     # houve fala de verdade
         avisos = []
         c.setupNeeded.connect(avisos.append)
 
@@ -84,6 +85,7 @@ class TestFailureIsVisible(unittest.TestCase):
         c._recorder.start = lambda: None
         c._recorder.stop = lambda: b"x" * 100
         c._recorder.last_duration_s = 2.0
+        c._recorder.peak_level = 0.5     # houve fala de verdade
         c._on_start()
         c._on_release(50)
         c._on_start()

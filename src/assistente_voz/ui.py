@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDialog,
+    QDoubleSpinBox,
     QFileDialog,
     QFormLayout,
     QFrame,
@@ -53,6 +54,7 @@ from .config import (
 from .hotkey import parse_hotkey, pretty_hotkey
 from .onboarding import WelcomeDialog
 from .resources import app_icon, logo_pixmap, tray_icon
+from .usage import format_duration
 
 APP_NAME = "Fala AI"
 BRAND = ("#BD619D", "#B48BB9", "#FBB03B")
@@ -441,6 +443,9 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(central)
 
         controller.historyChanged.connect(self.refresh_history)
+        controller.historyChanged.connect(
+            lambda: self._refresh_usage() if hasattr(self, "usage_label") else None
+        )
         controller.transcribed.connect(
             lambda t: self.statusBar().showMessage(f"Transcrito: {t[:60]}", 4000)
         )
@@ -991,6 +996,32 @@ class MainWindow(QMainWindow):
         form.addRow("", check_now_btn)
         col.addWidget(card)
 
+        card, form = _section("Uso")
+        self.usage_label = QLabel()
+        self.usage_label.setObjectName("Muted")
+        self.usage_label.setWordWrap(True)
+        self.cost_spin = QDoubleSpinBox()
+        self.cost_spin.setRange(0.0, 1000.0)
+        self.cost_spin.setDecimals(3)
+        self.cost_spin.setSingleStep(0.05)
+        self.cost_spin.setPrefix("US$ ")
+        self.cost_spin.setSuffix(" / hora")
+        self.cost_spin.setSpecialValueText("não estimar")
+        self.cost_spin.setValue(cfg.cost_per_hour)
+        self.cost_spin.setToolTip(
+            "Preço por hora de áudio do seu provedor. O app não chuta esse "
+            "valor: confira na página de preços e informe aqui."
+        )
+        self.cost_spin.valueChanged.connect(lambda _: self._refresh_usage())
+        reset_usage = QPushButton("Zerar contador")
+        reset_usage.setCursor(Qt.PointingHandCursor)
+        reset_usage.clicked.connect(self._reset_usage)
+        form.addRow("Total", self.usage_label)
+        form.addRow("Custo", self.cost_spin)
+        form.addRow("", reset_usage)
+        col.addWidget(card)
+        self._refresh_usage()
+
         card, form = _section("Ajuda")
         help_btn = QPushButton("Ver primeiros passos")
         help_btn.setCursor(Qt.PointingHandCursor)
@@ -1052,6 +1083,7 @@ class MainWindow(QMainWindow):
         """Liga todos os campos ao salvamento automático (com debounce)."""
         for w in (self.hotkey_btn, self.refine_hotkey_btn):
             w.changed.connect(self._queue_save)
+        self.cost_spin.valueChanged.connect(self._queue_save)
         for w in (self.threshold_spin, self.history_spin):
             w.valueChanged.connect(self._queue_save)
         for w in (
@@ -1104,6 +1136,37 @@ class MainWindow(QMainWindow):
         p = self.refiner_combo.currentData()
         self.refiner_model_edit.setText(DEFAULT_CHAT_MODELS.get(p, ""))
 
+    def _refresh_usage(self) -> None:
+        usage = self.controller.usage
+        total = usage.total()
+        if not total.count:
+            self.usage_label.setText("Nada transcrito ainda.")
+            return
+        linhas = [
+            f"<b>{total.count}</b> transcrições · "
+            f"<b>{format_duration(total.seconds)}</b> de áudio"
+        ]
+        taxa = self.cost_spin.value()
+        if taxa > 0:
+            linhas.append(
+                f"custo estimado: <b>US$ {usage.estimated_cost(taxa):.2f}</b>"
+            )
+        detalhe = " · ".join(
+            f"{PROVIDER_LABELS.get(p, p)}: {st.count}"
+            for p, st in sorted(usage.per_provider().items())
+        )
+        if detalhe:
+            linhas.append(detalhe)
+        self.usage_label.setText("<br>".join(linhas))
+
+    def _reset_usage(self) -> None:
+        if (
+            QMessageBox.question(self, "Zerar contador", "Zerar o contador de uso?")
+            == QMessageBox.Yes
+        ):
+            self.controller.usage.reset()
+            self._refresh_usage()
+
     def _open_logs(self) -> None:
         from .logs import open_log_folder
 
@@ -1125,6 +1188,7 @@ class MainWindow(QMainWindow):
             input_device=self.device_combo.currentData() or "",
             theme_mode=self.theme_combo.currentData(),
             sound_enabled=self.sound_check.isChecked(),
+            cost_per_hour=self.cost_spin.value(),
             output_mode=self.output_combo.currentData(),
             restore_clipboard=self.restore_check.isChecked(),
             history_size=self.history_spin.value(),

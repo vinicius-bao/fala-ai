@@ -283,6 +283,18 @@ class RecordingOverlay(QWidget):
         self._show_at_bottom()
         self._hide_timer.start(1400)
 
+    def show_warning(self, text: str) -> None:
+        self._wave_timer.stop()
+        self._elapsed_timer.stop()
+        self._wave.hide()
+        self._bar.hide()
+        self._stop_btn.hide()
+        self._cancel_btn.hide()
+        self._set_dot("close", "#FBB03B")
+        self._label.setText(text)
+        self._show_at_bottom()
+        self._hide_timer.start(2600)
+
     def hide_overlay(self) -> None:
         self._wave_timer.stop()
         self._elapsed_timer.stop()

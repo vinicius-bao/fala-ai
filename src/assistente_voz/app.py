@@ -30,6 +30,11 @@ from .hotkey import HotkeyListener
 from .output import TextOutput
 from .refiner import make_refiner
 from .transcription import make_engine
+from .usage import Usage
+
+# Pico abaixo disso = nada foi captado (microfone mudo/errado). Medido: silêncio
+# digital 0.00, sala silenciosa 0.05, sussurro 0.18 — 3x de margem.
+SILENCE_PEAK = 0.06
 
 log = logging.getLogger(__name__)
 
@@ -78,6 +83,7 @@ class Controller(QObject):
         self._activation = Activation(config.tap_threshold_ms)
         self._recorder = Recorder(device=config.input_device)
         self._output = TextOutput()
+        self.usage = Usage(config_dir() / "usage.json")
         self._engine = None
         self._engine_error = ""
         self._refiner = None
@@ -350,6 +356,17 @@ class Controller(QObject):
             self.overlayState.emit("hidden", "")
             self._emit_state()
             return
+        if self._recorder.peak_level < SILENCE_PEAK:
+            # Microfone mudo ou dispositivo errado: não adianta gastar API.
+            log.warning("Nada captado (pico %.3f)", self._recorder.peak_level)
+            self._activation.on_transcription_done()
+            self.overlayState.emit("warning", "Não captei nenhuma fala")
+            self._emit_state()
+            self.failed.emit(
+                "Não captei nenhuma fala — verifique se o microfone certo está "
+                "selecionado e se não está no mudo."
+            )
+            return
         # O motor é criado dentro do worker: importar o SDK trava a interface.
         self.overlayState.emit("processing", "Transcrevendo…")
         self._watchdog.start(120_000)   # 2 min: nunca ficar preso
@@ -409,6 +426,7 @@ class Controller(QObject):
         try:
             self.history.add(Transcription.create(text, duration,
                                                   self._engine_label()))
+            self.usage.add(self.config.provider, duration)
             self.historyChanged.emit()
         except Exception:  # noqa: BLE001
             log.exception("Falha ao atualizar o histórico")
@@ -584,6 +602,7 @@ class Controller(QObject):
             return
         if self.config.ai_note_enabled:
             text = append_note(text, self.config.ai_note_text)
+        self.usage.add(self.config.provider)
         entry = Transcription.create(text, 0.0, self._engine_label())
         self.history.add(entry)
         self.historyChanged.emit()
