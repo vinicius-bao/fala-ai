@@ -69,6 +69,7 @@ class Controller(QObject):
     _updateDone = Signal(object)        # (Release | None)
     _updateFail = Signal(str)
     _installerReady = Signal(str)       # caminho do instalador baixado
+    _setupFromWorker = Signal(str, object)   # (motivo, wav) vindo da thread
 
     def __init__(self, config: Config, history: History):
         super().__init__()
@@ -80,6 +81,7 @@ class Controller(QObject):
         self._engine = None
         self._engine_error = ""
         self._refiner = None
+        self._engine_lock = threading.Lock()
         self._pending_refine = False
         self._hotkey: HotkeyListener | None = None
         self._hotkey_refine: HotkeyListener | None = None
@@ -93,6 +95,7 @@ class Controller(QObject):
         self._updateDone.connect(self._on_update_done, Qt.QueuedConnection)
         self._updateFail.connect(self._on_update_fail, Qt.QueuedConnection)
         self._installerReady.connect(self._on_installer_ready, Qt.QueuedConnection)
+        self._setupFromWorker.connect(self._on_setup_from_worker, Qt.QueuedConnection)
         self._hkStartRefine.connect(self._on_start_refine, Qt.QueuedConnection)
         self._hkReleaseRefine.connect(self._on_release, Qt.QueuedConnection)
         self._refineReady.connect(self._on_refine_ready, Qt.QueuedConnection)
@@ -200,37 +203,62 @@ class Controller(QObject):
         return bool(resolve_provider_key(self.config, provider))
 
     def _rebuild_engine(self) -> None:
-        provider = self.config.provider
-        self._engine_error = ""
-        key = resolve_provider_key(self.config, provider)
-        if not key:
-            self._engine = None  # silencioso: quem avisa é quem tenta usar
-            return
-        try:
-            self._engine = make_engine(
-                provider, key, provider_model(self.config, provider)
-            )
-        except Exception as e:  # noqa: BLE001
+        """Só invalida: criar o cliente importa o SDK e trava a interface.
+
+        A construção acontece sob demanda, já dentro da thread de trabalho.
+        """
+        with self._engine_lock:
             self._engine = None
-            self._engine_error = str(e)
-            log.exception("Falha ao iniciar o motor de transcrição")
+            self._engine_error = ""
+
+    def _ensure_engine(self) -> bool:
+        """Cria o motor se preciso. Chamado da thread de trabalho."""
+        with self._engine_lock:
+            if self._engine is not None:
+                return True
+            provider = self.config.provider
+            key = resolve_provider_key(self.config, provider)
+            if not key:
+                self._engine_error = ""
+                return False
+            try:
+                self._engine = make_engine(
+                    provider, key, provider_model(self.config, provider)
+                )
+                self._engine_error = ""
+                return True
+            except Exception as e:  # noqa: BLE001
+                self._engine = None
+                self._engine_error = str(e)
+                log.exception("Falha ao iniciar o motor de transcrição")
+                return False
 
     def _engine_label(self) -> str:
         return f"{self.config.provider}:{provider_model(self.config, self.config.provider)}"
 
     def _rebuild_refiner(self) -> None:
-        provider = self.config.refiner_provider
-        key = resolve_provider_key(self.config, provider)
-        if not key:
+        """Só invalida — ver _rebuild_engine."""
+        with self._engine_lock:
             self._refiner = None
-            return
-        try:
-            model = self.config.refiner_model.strip() or DEFAULT_CHAT_MODELS.get(
-                provider, ""
-            )
-            self._refiner = make_refiner(provider, key, model)
-        except Exception:  # noqa: BLE001
-            self._refiner = None
+
+    def _ensure_refiner(self) -> bool:
+        with self._engine_lock:
+            if self._refiner is not None:
+                return True
+            provider = self.config.refiner_provider
+            key = resolve_provider_key(self.config, provider)
+            if not key:
+                return False
+            try:
+                model = self.config.refiner_model.strip() or DEFAULT_CHAT_MODELS.get(
+                    provider, ""
+                )
+                self._refiner = make_refiner(provider, key, model)
+                return True
+            except Exception:  # noqa: BLE001
+                self._refiner = None
+                log.exception("Falha ao iniciar o refinador")
+                return False
 
     # ---- ativação (thread do Qt) ----
     def _on_start(self) -> None:
@@ -322,19 +350,7 @@ class Controller(QObject):
             self.overlayState.emit("hidden", "")
             self._emit_state()
             return
-        if self._engine is None:
-            self._rebuild_engine()
-        if self._engine is None:
-            # Falha aqui era invisível (só barra de status, com a janela
-            # fechada). Agora abre a janela explicando o motivo.
-            self._activation.on_transcription_done()
-            self.overlayState.emit("hidden", "")
-            self._emit_state()
-            self.setupNeeded.emit(
-                self._engine_error
-                or "Falta a chave de API para transcrever o que você falar."
-            )
-            return
+        # O motor é criado dentro do worker: importar o SDK trava a interface.
         self.overlayState.emit("processing", "Transcrevendo…")
         self._watchdog.start(120_000)   # 2 min: nunca ficar preso
         threading.Thread(
@@ -342,6 +358,13 @@ class Controller(QObject):
         ).start()
 
     def _worker(self, wav: bytes, duration: float) -> None:
+        if not self._ensure_engine():
+            self._setupFromWorker.emit(
+                self._engine_error
+                or "Falta a chave de API para transcrever o que você falar.",
+                wav,
+            )
+            return
         try:
             text = self._engine.transcribe(
                 wav,
@@ -360,17 +383,13 @@ class Controller(QObject):
         text = text.strip()
         if not text:
             return
-        if self._pending_refine and self._refiner is not None:
+        if self._pending_refine:
             self.refineBusy.emit(True)
             self.overlayState.emit("processing", "Refinando…")
             threading.Thread(
                 target=self._refine_worker, args=(text, duration), daemon=True
             ).start()
             return
-        if self._pending_refine and self._refiner is None:
-            self.failed.emit(
-                "Refinador não configurado — colei o texto cru. (aba Configurações)"
-            )
         self._finish_output(text, duration)
 
     def _finish_output(self, text: str, duration: float) -> None:
@@ -398,6 +417,11 @@ class Controller(QObject):
         self.overlayState.emit("done", done)
 
     def _refine_worker(self, text: str, duration: float) -> None:
+        if not self._ensure_refiner():
+            self._refineFailed.emit(
+                "refinador não configurado", text, duration
+            )
+            return
         try:
             context = ""
             if self.config.context_enabled:
@@ -421,19 +445,17 @@ class Controller(QObject):
         entry = self.history.by_uid(uid)
         if entry is None:
             return
-        if self._refiner is None:
-            self._rebuild_refiner()
-        if self._refiner is None:
-            self.setupNeeded.emit(
-                "Falta a chave do provedor escolhido para refinar o texto."
-            )
-            return
         self.itemRefineBusy.emit(uid, True)
         threading.Thread(
             target=self._item_refine_worker, args=(uid, entry.text), daemon=True
         ).start()
 
     def _item_refine_worker(self, uid: str, text: str) -> None:
+        if not self._ensure_refiner():
+            self._itemRefineFailed.emit(
+                uid, "falta a chave do provedor escolhido para refinar"
+            )
+            return
         try:
             context = ""
             if self.config.context_enabled:
@@ -466,6 +488,16 @@ class Controller(QObject):
         self.refineBusy.emit(False)
         self.failed.emit(f"Refino falhou: {message} — colei o texto cru.")
         self._finish_output(raw_text, duration)
+
+    def _on_setup_from_worker(self, message: str, wav) -> None:
+        self._watchdog.stop()
+        self._activation.on_transcription_done()
+        self.overlayState.emit("hidden", "")
+        self._emit_state()
+        if wav:
+            self._save_failed_audio(wav)
+            self.pendingChanged.emit(len(self.pending_audios()))
+        self.setupNeeded.emit(message)
 
     def _on_failed(self, message: str, wav: bytes) -> None:
         self._watchdog.stop()
@@ -512,20 +544,17 @@ class Controller(QObject):
             self.failed.emit(str(e))
             return
         self._file_source = path if delete_after else ""
-        if self._engine is None:
-            self._rebuild_engine()
-        if self._engine is None:
-            self.setupNeeded.emit(
-                self._engine_error
-                or "Falta a chave de API para transcrever este áudio."
-            )
-            return
         self.fileBusy.emit(True)
         threading.Thread(
             target=self._file_worker, args=(data, name), daemon=True
         ).start()
 
     def _file_worker(self, data: bytes, name: str) -> None:
+        if not self._ensure_engine():
+            self._fileFailed.emit(
+                self._engine_error or "Falta a chave de API para transcrever."
+            )
+            return
         try:
             text = self._engine.transcribe(
                 data,

@@ -7,6 +7,7 @@ não colava nada e parecia que o app tinha morrido.
 """
 
 import os
+import time
 import unittest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -45,6 +46,14 @@ class TestFailureIsVisible(unittest.TestCase):
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
 
+    def _pump(self, condicao, limite=4.0):
+        """Roda o loop do Qt até a thread de trabalho responder."""
+        fim = time.time() + limite
+        while time.time() < fim and not condicao():
+            self.app.processEvents()
+            time.sleep(0.02)
+        self.app.processEvents()
+
     def test_motor_indisponivel_avisa_em_vez_de_silenciar(self):
         from assistente_voz.app import Controller
         from assistente_voz.config import Config
@@ -60,6 +69,7 @@ class TestFailureIsVisible(unittest.TestCase):
         c._on_start()
         c._on_release(50)
         c._on_start()          # para e tenta transcrever -> motor indisponível
+        self._pump(lambda: bool(avisos))
 
         self.assertTrue(avisos, "a falha continuou invisível")
         self.assertIn("faster-whisper", avisos[0])
@@ -77,6 +87,7 @@ class TestFailureIsVisible(unittest.TestCase):
         c._on_start()
         c._on_release(50)
         c._on_start()
+        self._pump(lambda: c._activation.state is State.IDLE)
         self.assertIs(c._activation.state, State.IDLE)
 
 
